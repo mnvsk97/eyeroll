@@ -1,11 +1,11 @@
 [project]
 name = "eyeroll"
-version = "0.2.0"
+version = "0.2.1"
 description = "AI eyes that roll through video footage — watch, understand, turn into code actions."
 requires-python = ">=3.11"
-license = "MIT"
+license = {text = "MIT"}
 authors = [
-    { name = "mnvsk97" },
+    { name = "mnvsk97", email = "mnvsk97@gmail.com" },
 ]
 readme = "README.md"
 keywords = ["video", "ai", "agent", "skills", "bug-report", "gemini", "claude-code"]

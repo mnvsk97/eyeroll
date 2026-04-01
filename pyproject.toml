@@ -3,6 +3,23 @@ name = "eyeroll"
 version = "0.1.0"
 description = "AI eyes that roll through video footage — watch, understand, turn into code actions."
 requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "mnvsk97" },
+]
+readme = "README.md"
+keywords = ["video", "ai", "agent", "skills", "bug-report", "gemini", "claude-code"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Bug Tracking",
+    "Topic :: Multimedia :: Video",
+]
 dependencies = [
     "click>=8.1",
     "python-dotenv>=1.0",
@@ -11,8 +28,19 @@ dependencies = [
     "yt-dlp>=2024.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/mnvsk97/eyeroll"
+Repository = "https://github.com/mnvsk97/eyeroll"
+Issues = "https://github.com/mnvsk97/eyeroll/issues"
+
 [project.scripts]
 eyeroll = "eyeroll.cli:cli"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -20,12 +48,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["eyeroll"]
-
-[dependency-groups]
-test = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

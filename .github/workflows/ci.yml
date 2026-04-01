@@ -57,10 +57,14 @@ jobs:
         id: check
         run: |
           VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          if pip index versions eyeroll 2>/dev/null | grep -q "$VERSION"; then
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/eyeroll/$VERSION/json")
+          if [ "$STATUS" = "200" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION already exists on PyPI"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION not found on PyPI, will publish"
           fi
 
       - name: Publish to PyPI

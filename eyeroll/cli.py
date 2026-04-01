@@ -63,31 +63,44 @@ def init():
               help="Additional context (Slack message, issue description, what to do with the video, etc.)")
 @click.option("--max-frames", default=20, show_default=True,
               help="Maximum key frames to analyze from video.")
+@click.option("--backend", "-b", type=click.Choice(["gemini", "ollama"]), default=None,
+              help="Vision backend. Defaults to EYEROLL_BACKEND env var, then gemini.")
+@click.option("--model", "-m", default=None,
+              help="Model override (e.g., qwen3-vl:8b for ollama, gemini-2.0-flash for gemini).")
 @click.option("--output", "-o", default=None,
               help="Write output to file instead of stdout.")
 @click.option("--verbose", "-v", is_flag=True, help="Show progress details.")
-def watch(source, context, max_frames, output, verbose):
+def watch(source, context, max_frames, backend, model, output, verbose):
     """Analyze a video/screenshot and produce structured notes.
 
     SOURCE can be a URL (YouTube, Loom, etc.) or a local file path.
 
+    \b
+    Backends:
+      gemini   Google Gemini Flash API (default, requires GEMINI_API_KEY)
+      ollama   Local models via Ollama (e.g., qwen3-vl, no API key needed)
+
+    \b
     Examples:
-
-        eyeroll watch https://loom.com/share/abc123
-
-        eyeroll watch ./recording.mp4 --context "checkout broken after PR #432"
-
-        eyeroll watch demo.mp4 -c "create a skill based on this tutorial"
-
-        eyeroll watch screenshot.png -c "this error appears for admin users"
+      eyeroll watch https://loom.com/share/abc123
+      eyeroll watch ./recording.mp4 --context "checkout broken after PR #432"
+      eyeroll watch demo.mp4 -c "create a skill from this" --backend ollama
+      eyeroll watch screenshot.png -b ollama -m qwen3-vl:2b
     """
     from .watch import watch as run_watch
+
+    # --model without --backend implies ollama if model looks local
+    if model and not backend:
+        if not model.startswith("gemini"):
+            backend = "ollama"
 
     try:
         report = run_watch(
             source=source,
             context=context,
             max_frames=max_frames,
+            backend_name=backend,
+            model=model,
             verbose=verbose,
         )
 
@@ -96,7 +109,7 @@ def watch(source, context, max_frames, output, verbose):
             os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
             with open(output, "w") as f:
                 f.write(report)
-            click.echo(f"Bug report written to: {output}", err=True)
+            click.echo(f"Report written to: {output}", err=True)
         else:
             click.echo(report)
 

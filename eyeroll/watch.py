@@ -9,8 +9,9 @@ from .analyze import (
     analyze_audio,
     analyze_frames,
     analyze_video_direct,
-    synthesize_bug_report,
+    synthesize_report,
 )
+from .backend import get_backend, reset_backend
 from .extract import (
     extract_audio,
     extract_key_frames,
@@ -19,7 +20,7 @@ from .extract import (
     has_audio_track,
 )
 
-# Max file size for direct video upload to Gemini (20MB)
+# Max file size for direct video upload (20MB)
 MAX_DIRECT_UPLOAD_MB = 20
 # Max video duration for direct upload (2 minutes)
 MAX_DIRECT_UPLOAD_SECONDS = 120
@@ -29,19 +30,37 @@ def watch(
     source: str,
     context: str | None = None,
     max_frames: int = 20,
+    backend_name: str | None = None,
+    model: str | None = None,
     verbose: bool = False,
 ) -> str:
-    """Full pipeline: acquire media → extract → analyze → report.
+    """Full pipeline: acquire media -> extract -> analyze -> report.
 
     Args:
         source: URL or local file path to video/image.
-        context: Optional text context from the reporter (Slack message, issue body, etc.)
+        context: Optional text context (Slack message, issue body, etc.)
         max_frames: Maximum number of key frames to extract and analyze.
+        backend_name: 'gemini' or 'ollama'. Defaults to EYEROLL_BACKEND env var, then 'gemini'.
+        model: Model override (e.g., 'qwen3-vl:8b' for ollama, 'gemini-2.0-flash' for gemini).
         verbose: Print progress to stderr.
 
     Returns:
         Markdown-formatted report.
     """
+    # Build backend kwargs
+    backend_kwargs = {}
+    if model:
+        backend_kwargs["model"] = model
+
+    # Initialize backend early to fail fast on config errors
+    backend = get_backend(backend_name, **backend_kwargs)
+    backend_label = backend_name or os.environ.get("EYEROLL_BACKEND", "gemini")
+
+    if verbose:
+        print(f"Backend: {backend_label}", file=sys.stderr)
+        if model:
+            print(f"Model: {model}", file=sys.stderr)
+
     # Step 1: Acquire
     if verbose:
         print(f"Acquiring: {source}", file=sys.stderr)
@@ -58,21 +77,25 @@ def watch(
 
     try:
         if media_type == "image":
-            return _analyze_image(file_path, context, title, verbose)
+            return _analyze_image(file_path, context, title, backend_label, verbose)
         else:
-            return _analyze_video(file_path, context, title, max_frames, verbose)
+            return _analyze_video(
+                file_path, context, title, max_frames, backend, backend_label, verbose,
+            )
     finally:
         # Clean up downloaded files (not local files)
         if media["source_url"]:
             parent = os.path.dirname(file_path)
             if parent.startswith("/tmp") or "eyeroll_" in parent:
                 shutil.rmtree(parent, ignore_errors=True)
+        reset_backend()
 
 
 def _analyze_image(
     file_path: str,
     context: str | None,
     title: str,
+    backend_label: str,
     verbose: bool,
 ) -> str:
     """Analyze a single screenshot/image."""
@@ -84,13 +107,13 @@ def _analyze_image(
 
     frame_analyses = analyze_frames(frames, verbose=verbose)
 
-    report = synthesize_bug_report(
+    report = synthesize_report(
         frame_analyses=frame_analyses,
         context=context,
         verbose=verbose,
     )
 
-    return _wrap_report(report, title, "screenshot", context)
+    return _wrap_report(report, title, "screenshot", context, backend_label)
 
 
 def _analyze_video(
@@ -98,6 +121,8 @@ def _analyze_video(
     context: str | None,
     title: str,
     max_frames: int,
+    backend,
+    backend_label: str,
     verbose: bool,
 ) -> str:
     """Analyze a video file."""
@@ -109,8 +134,10 @@ def _analyze_video(
         print(f"  Size: {file_size_mb:.1f}MB", file=sys.stderr)
 
     # Decide strategy: direct upload vs frame-by-frame
+    # Only use direct upload if backend supports it AND video is small enough
     use_direct = (
-        file_size_mb <= MAX_DIRECT_UPLOAD_MB
+        backend.supports_video
+        and file_size_mb <= MAX_DIRECT_UPLOAD_MB
         and duration <= MAX_DIRECT_UPLOAD_SECONDS
     )
 
@@ -118,14 +145,13 @@ def _analyze_video(
     frame_analyses = None
 
     if use_direct:
-        # Send full video to Gemini — better context, more accurate
         if verbose:
             print("  Strategy: direct video upload", file=sys.stderr)
         video_analysis = analyze_video_direct(file_path, duration, verbose=verbose)
     else:
-        # Extract key frames and analyze individually
         if verbose:
-            print("  Strategy: frame-by-frame analysis", file=sys.stderr)
+            reason = "backend doesn't support video" if not backend.supports_video else "video too large"
+            print(f"  Strategy: frame-by-frame ({reason})", file=sys.stderr)
         frames = extract_key_frames(file_path, max_frames=max_frames)
         if verbose:
             print(f"  Extracted {len(frames)} key frames", file=sys.stderr)
@@ -136,19 +162,20 @@ def _analyze_video(
             frame_dir = os.path.dirname(frames[0]["frame_path"])
             shutil.rmtree(frame_dir, ignore_errors=True)
 
-    # Audio transcription (if available)
+    # Audio transcription (only if backend supports it)
     transcript = None
-    if has_audio_track(file_path):
+    if backend.supports_audio and has_audio_track(file_path):
         audio_path = extract_audio(file_path)
         if audio_path:
             transcript = analyze_audio(audio_path, verbose=verbose)
             if transcript and "[no speech detected]" in transcript.lower():
                 transcript = None
-            # Clean up audio file
             audio_dir = os.path.dirname(audio_path)
             shutil.rmtree(audio_dir, ignore_errors=True)
+    elif verbose and not backend.supports_audio:
+        print("  Skipping audio (not supported by this backend)", file=sys.stderr)
 
-    report = synthesize_bug_report(
+    report = synthesize_report(
         frame_analyses=frame_analyses,
         video_analysis=video_analysis,
         transcript=transcript,
@@ -156,7 +183,7 @@ def _analyze_video(
         verbose=verbose,
     )
 
-    return _wrap_report(report, title, f"video ({fmt_timestamp(duration)})", context)
+    return _wrap_report(report, title, f"video ({fmt_timestamp(duration)})", context, backend_label)
 
 
 def _wrap_report(
@@ -164,10 +191,12 @@ def _wrap_report(
     title: str,
     media_type: str,
     context: str | None,
+    backend_label: str,
 ) -> str:
     """Add metadata header to the report."""
     header = f"# eyeroll: {title}\n"
     header += f"**Source type:** {media_type}\n"
+    header += f"**Backend:** {backend_label}\n"
     if context:
         header += f"**Context:** {context}\n"
     header += "\n---\n\n"

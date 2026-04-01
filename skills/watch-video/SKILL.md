@@ -32,14 +32,19 @@ The notes are designed to give a coding agent enough context to take any action 
 
 ## Setup
 
-Requires Python 3.11+, ffmpeg, and a Gemini API key.
+Requires Python 3.11+ and ffmpeg. Choose a backend:
 
+**Gemini (default, API-based):**
 ```bash
 pip install eyeroll
-eyeroll init
+eyeroll init          # or: export GEMINI_API_KEY=your-key
 ```
 
-Or set the API key directly: `export GEMINI_API_KEY=your-key`
+**Ollama + Qwen3-VL (local, no API key):**
+```bash
+pip install eyeroll
+ollama serve          # start Ollama
+```
 
 For URL downloads (Loom, YouTube), install yt-dlp: `brew install yt-dlp`
 
@@ -48,7 +53,7 @@ For URL downloads (Loom, YouTube), install yt-dlp: `brew install yt-dlp`
 ### Analyze a video or screenshot
 
 ```bash
-eyeroll watch <source> [--context "..."] [--max-frames 20] [--output report.md] [--verbose]
+eyeroll watch <source> [--context "..."] [--backend gemini|ollama] [--model MODEL] [--max-frames 20] [--output report.md] [--verbose]
 ```
 
 - `source`: URL (Loom, YouTube, any yt-dlp supported site) or local file path (.mp4, .webm, .mov, .png, .jpg, .gif)

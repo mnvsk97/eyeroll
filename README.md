@@ -27,12 +27,26 @@ npx skills add mnvsk97/eyeroll@watch-video
 ## Setup
 
 ```bash
-pip install eyeroll    # or: pip install git+https://github.com/mnvsk97/eyeroll.git
-eyeroll init           # set up Gemini API key
+pip install eyeroll
 brew install yt-dlp    # for URL downloads (Loom, YouTube)
 ```
 
-Or just set the key: `export GEMINI_API_KEY=your-key` ([get one free](https://aistudio.google.com/apikey))
+### Option A: Gemini (default, API-based)
+
+```bash
+eyeroll init           # or: export GEMINI_API_KEY=your-key
+```
+
+Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Supports direct video upload, audio transcription. ~$0.15 per analysis.
+
+### Option B: Ollama + Qwen3-VL (local, private, free)
+
+```bash
+brew install ollama    # install Ollama
+ollama serve           # start the server
+```
+
+No API key needed. The model is pulled automatically on first use (~6GB for qwen3-vl:8b). Runs entirely on your machine.
 
 ## Usage
 
@@ -52,10 +66,33 @@ User: look at this recording, what's going on?
 ### Standalone CLI
 
 ```bash
+# Gemini (default)
 eyeroll watch https://loom.com/share/abc123
 eyeroll watch ./bug.mp4 --context "checkout broken after PR #432"
-eyeroll watch screenshot.png --verbose
+
+# Ollama (local)
+eyeroll watch ./bug.mp4 --backend ollama
+eyeroll watch screenshot.png -b ollama -m qwen3-vl:2b
+
+# Or set as default
+export EYEROLL_BACKEND=ollama
+eyeroll watch ./recording.mp4
 ```
+
+## Backends
+
+| Backend | Video | Audio | API Key | Cost | Best for |
+|---------|-------|-------|---------|------|----------|
+| **gemini** | Direct upload | Yes | Required | ~$0.15/video | Best quality, short videos |
+| **ollama** | Frame-by-frame | No | None | Free | Privacy, offline, no API limits |
+
+### Ollama models
+
+| Model | Size | Notes |
+|-------|------|-------|
+| `qwen3-vl` (default) | 6.1GB | Best quality, needs 8GB+ RAM |
+| `qwen3-vl:2b` | 1.9GB | Lighter, works on 8GB machines |
+| `qwen3-vl:32b` | 21GB | Higher quality, needs 32GB+ RAM |
 
 ## How it works
 
@@ -64,7 +101,7 @@ Video (Loom / YouTube / local file / screenshot)
     ↓
 eyeroll extracts: frames, audio, on-screen text
     ↓
-Gemini Flash analyzes: what's shown, what's said, what happened
+Backend analyzes: Gemini Flash (API) or Qwen3-VL (local via Ollama)
     ↓
 Structured notes → skill decides what to do next
     ↓
@@ -88,11 +125,8 @@ watch-video:    return notes to the agent
 - Python 3.11+
 - ffmpeg (`brew install ffmpeg`)
 - yt-dlp (`brew install yt-dlp`) — for URL downloads
-- Gemini API key ([free](https://aistudio.google.com/apikey))
-
-## Cost
-
-Typically under $0.15 per video analysis using Gemini 2.0 Flash.
+- **Gemini backend:** Gemini API key ([free](https://aistudio.google.com/apikey))
+- **Ollama backend:** [Ollama](https://ollama.com) installed and running
 
 ## License
 

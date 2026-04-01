@@ -1,46 +1,8 @@
-"""Analyze video frames and audio using Gemini to produce a structured bug report."""
+"""Analyze video frames and audio to produce structured notes."""
 
-import base64
-import os
 import sys
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-
-class AnalysisError(RuntimeError):
-    """Raised when video analysis fails."""
-
-
-def _get_gemini_client():
-    from google import genai
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise AnalysisError(
-            "GEMINI_API_KEY is not set.\n\n"
-            "Get a free key at: https://aistudio.google.com/apikey\n"
-            "Then: export GEMINI_API_KEY=your-key"
-        )
-    return genai.Client(api_key=api_key)
-
-
-def _encode_image(image_path: str) -> tuple[str, str]:
-    """Read an image file and return (base64_data, mime_type)."""
-    ext = os.path.splitext(image_path)[1].lower()
-    mime_map = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".gif": "image/gif",
-        ".webp": "image/webp",
-        ".bmp": "image/bmp",
-    }
-    mime_type = mime_map.get(ext, "image/jpeg")
-    with open(image_path, "rb") as f:
-        data = base64.standard_b64encode(f.read()).decode("utf-8")
-    return data, mime_type
-
+from .backend import get_backend
 
 FRAME_ANALYSIS_PROMPT = """You are analyzing a screen recording.
 This is frame {frame_index} at timestamp {timestamp}.
@@ -70,6 +32,13 @@ Watch the entire video carefully and describe:
 6. **KEY MOMENTS**: What are the most important moments or transitions in the video?
 
 Be precise. Quote exact text. Don't guess what you can't see clearly."""
+
+AUDIO_PROMPT = (
+    "Transcribe this audio from a video recording. "
+    "Include everything the speaker says. "
+    "Note any references to specific features, pages, errors, or timeframes. "
+    "If the audio is silent or contains no speech, respond with: [no speech detected]"
+)
 
 SYNTHESIS_PROMPT = """You are a senior developer analyzing a screen recording or screenshot.
 
@@ -141,20 +110,15 @@ Rules:
 
 def analyze_frames(
     frames: list[dict],
+    backend_name: str | None = None,
     verbose: bool = False,
+    **backend_kwargs,
 ) -> list[dict]:
-    """Analyze individual frames using Gemini vision.
+    """Analyze individual frames using the configured backend.
 
-    Args:
-        frames: list of dicts with frame_path, timestamp, frame_index.
-        verbose: print progress to stderr.
-
-    Returns:
-        list of dicts with frame_index, timestamp, analysis (text).
+    Returns list of dicts with frame_index, timestamp, analysis (text).
     """
-    from google.genai import types
-
-    client = _get_gemini_client()
+    backend = get_backend(backend_name, **backend_kwargs)
     results = []
 
     for frame in frames:
@@ -166,30 +130,17 @@ def analyze_frames(
                 file=sys.stderr,
             )
 
-        b64_data, mime_type = _encode_image(frame["frame_path"])
-
         prompt = FRAME_ANALYSIS_PROMPT.format(
             frame_index=frame["frame_index"],
             timestamp=f"{frame['timestamp']:.1f}s",
         )
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=types.Content(
-                parts=[
-                    types.Part.from_bytes(
-                        data=base64.standard_b64decode(b64_data),
-                        mime_type=mime_type,
-                    ),
-                    types.Part(text=prompt),
-                ],
-            ),
-        )
+        text = backend.analyze_image(frame["frame_path"], prompt, verbose=verbose)
 
         results.append({
             "frame_index": frame["frame_index"],
             "timestamp": frame["timestamp"],
-            "analysis": response.text,
+            "analysis": text,
         })
 
     return results
@@ -198,98 +149,59 @@ def analyze_frames(
 def analyze_video_direct(
     video_path: str,
     duration: float,
+    backend_name: str | None = None,
     verbose: bool = False,
+    **backend_kwargs,
 ) -> str:
-    """Send the full video to Gemini for analysis (if small enough).
+    """Send the full video to the backend for analysis.
 
-    Gemini Flash supports video input directly — more accurate than
-    frame-by-frame for short videos.
-
+    Only works with backends that support direct video input (e.g. Gemini).
     Returns the analysis text.
     """
-    from google.genai import types
-
-    client = _get_gemini_client()
-    file_size_mb = os.path.getsize(video_path) / (1024 * 1024)
+    backend = get_backend(backend_name, **backend_kwargs)
 
     if verbose:
+        import os
+        file_size_mb = os.path.getsize(video_path) / (1024 * 1024)
         print(
-            f"  Sending full video to Gemini ({file_size_mb:.1f}MB, {duration:.0f}s)...",
+            f"  Sending full video ({file_size_mb:.1f}MB, {duration:.0f}s)...",
             file=sys.stderr,
         )
 
-    with open(video_path, "rb") as f:
-        video_bytes = f.read()
-
     prompt = VIDEO_ANALYSIS_PROMPT.format(duration=f"{duration:.0f}")
-
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=types.Content(
-            parts=[
-                types.Part.from_bytes(
-                    data=video_bytes,
-                    mime_type="video/mp4",
-                ),
-                types.Part(text=prompt),
-            ],
-        ),
-    )
-
-    return response.text
+    return backend.analyze_video(video_path, prompt, verbose=verbose)
 
 
-def analyze_audio(audio_path: str, verbose: bool = False) -> str:
-    """Transcribe audio using Gemini."""
-    from google.genai import types
-
-    client = _get_gemini_client()
+def analyze_audio(
+    audio_path: str,
+    backend_name: str | None = None,
+    verbose: bool = False,
+    **backend_kwargs,
+) -> str:
+    """Transcribe audio using the configured backend."""
+    backend = get_backend(backend_name, **backend_kwargs)
 
     if verbose:
         print("  Transcribing audio...", file=sys.stderr)
 
-    with open(audio_path, "rb") as f:
-        audio_bytes = f.read()
-
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=types.Content(
-            parts=[
-                types.Part.from_bytes(
-                    data=audio_bytes,
-                    mime_type="audio/mp3",
-                ),
-                types.Part(
-                    text=(
-                        "Transcribe this audio from a bug report video. "
-                        "Include everything the speaker says. "
-                        "Note any references to specific features, pages, errors, or timeframes. "
-                        "If the audio is silent or contains no speech, respond with: [no speech detected]"
-                    ),
-                ),
-            ],
-        ),
-    )
-
-    return response.text
+    return backend.analyze_audio(audio_path, AUDIO_PROMPT, verbose=verbose)
 
 
-def synthesize_bug_report(
+def synthesize_report(
     frame_analyses: list[dict] | None = None,
     video_analysis: str | None = None,
     transcript: str | None = None,
     context: str | None = None,
+    backend_name: str | None = None,
     verbose: bool = False,
+    **backend_kwargs,
 ) -> str:
-    """Combine all analysis signals into a structured bug report.
+    """Combine all analysis signals into structured notes.
 
-    Returns markdown bug report.
+    Returns markdown report.
     """
-    from google.genai import types
+    backend = get_backend(backend_name, **backend_kwargs)
 
-    client = _get_gemini_client()
-
-    # Build the frame analysis section
     if frame_analyses:
         from .extract import fmt_timestamp
         frame_text = "\n\n".join(
@@ -308,11 +220,6 @@ def synthesize_bug_report(
     )
 
     if verbose:
-        print("  Synthesizing bug report...", file=sys.stderr)
+        print("  Synthesizing report...", file=sys.stderr)
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-    )
-
-    return response.text
+    return backend.generate(prompt, verbose=verbose)

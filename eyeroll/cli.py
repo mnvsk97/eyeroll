@@ -13,7 +13,7 @@ load_dotenv()
 
 @click.group()
 def cli():
-    """eyeroll — Watch a bug video, understand it, fix it."""
+    """eyeroll — AI eyes that roll through video. Watch, understand, act."""
 
 
 @cli.command()
@@ -60,14 +60,14 @@ def init():
 @cli.command()
 @click.argument("source")
 @click.option("--context", "-c", default=None,
-              help="Additional context from the reporter (Slack message, issue description, etc.)")
+              help="Additional context (Slack message, issue description, what to do with the video, etc.)")
 @click.option("--max-frames", default=20, show_default=True,
               help="Maximum key frames to analyze from video.")
 @click.option("--output", "-o", default=None,
-              help="Write bug report to file instead of stdout.")
+              help="Write output to file instead of stdout.")
 @click.option("--verbose", "-v", is_flag=True, help="Show progress details.")
 def watch(source, context, max_frames, output, verbose):
-    """Analyze a video/screenshot and generate a bug report.
+    """Analyze a video/screenshot and produce structured notes.
 
     SOURCE can be a URL (YouTube, Loom, etc.) or a local file path.
 
@@ -75,7 +75,9 @@ def watch(source, context, max_frames, output, verbose):
 
         eyeroll watch https://loom.com/share/abc123
 
-        eyeroll watch ./bug.mp4 --context "checkout broken after PR #432"
+        eyeroll watch ./recording.mp4 --context "checkout broken after PR #432"
+
+        eyeroll watch demo.mp4 -c "create a skill based on this tutorial"
 
         eyeroll watch screenshot.png -c "this error appears for admin users"
     """

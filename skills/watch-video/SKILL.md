@@ -35,9 +35,7 @@ The notes are designed to give a coding agent enough context to take any action 
 Requires Python 3.11+, ffmpeg, and a Gemini API key.
 
 ```bash
-git clone https://github.com/mnvsk97/eyeroll.git
-cd eyeroll
-pip install .
+pip install eyeroll
 eyeroll init
 ```
 

@@ -2,7 +2,60 @@
 
 AI eyes that roll through video footage — watch, understand, act.
 
-eyeroll analyzes screen recordings, Loom videos, YouTube links, and screenshots, then produces structured notes that AI coding agents can act on — fix bugs, build features, create skills, generate subagents, or anything else.
+eyeroll is a collection of AI coding agent skills that analyze screen recordings, Loom videos, YouTube links, and screenshots, then turn them into code actions.
+
+## Skills
+
+| Skill | What it does |
+|-------|-------------|
+| **watch-video** | Watch a video and produce structured notes |
+| **video-to-pr** | Watch a bug video → diagnose → fix → raise PR |
+| **video-to-skill** | Watch a tutorial/demo → generate a Claude Code skill |
+
+## Install
+
+```bash
+# Install all skills
+npx skills add mnvsk97/eyeroll
+
+# Install a specific skill
+npx skills add mnvsk97/eyeroll@video-to-pr
+npx skills add mnvsk97/eyeroll@video-to-skill
+npx skills add mnvsk97/eyeroll@watch-video
+```
+
+## Setup
+
+```bash
+pip install eyeroll    # or: pip install git+https://github.com/mnvsk97/eyeroll.git
+eyeroll init           # set up Gemini API key
+brew install yt-dlp    # for URL downloads (Loom, YouTube)
+```
+
+Or just set the key: `export GEMINI_API_KEY=your-key` ([get one free](https://aistudio.google.com/apikey))
+
+## Usage
+
+### In Claude Code (via skills)
+
+```
+User: fix this bug: https://loom.com/share/abc123
+      → video-to-pr skill activates, watches video, finds code, fixes, raises PR
+
+User: watch this tutorial and create a skill from it: ./demo.mp4
+      → video-to-skill skill activates, watches video, generates SKILL.md
+
+User: look at this recording, what's going on?
+      → watch-video skill activates, produces structured notes
+```
+
+### Standalone CLI
+
+```bash
+eyeroll watch https://loom.com/share/abc123
+eyeroll watch ./bug.mp4 --context "checkout broken after PR #432"
+eyeroll watch screenshot.png --verbose
+```
 
 ## How it works
 
@@ -11,33 +64,13 @@ Video (Loom / YouTube / local file / screenshot)
     ↓
 eyeroll extracts: frames, audio, on-screen text
     ↓
-Gemini Flash analyzes: what's shown, what's said, what's on screen
+Gemini Flash analyzes: what's shown, what's said, what happened
     ↓
-Structured notes: what happened, key details, actionable context
+Structured notes → skill decides what to do next
     ↓
-Feed to Claude Code / Codex → understand → act
-```
-
-## Use cases
-
-- **Bug video → fix → PR**: QA sends a recording, eyeroll understands the bug, agent fixes it
-- **Demo video → build feature**: Watch a product demo, build something similar
-- **Tutorial → skill/plugin**: Watch a walkthrough, generate a skill from it
-- **Architecture video → implementation**: Watch a design review, implement it
-- **Any video → structured notes**: Turn any screen recording into actionable developer context
-
-## Quick start
-
-```bash
-pip install .
-eyeroll init          # set up Gemini API key
-eyeroll watch https://loom.com/share/abc123
-```
-
-With context (significantly improves quality):
-
-```bash
-eyeroll watch ./recording.mp4 --context "checkout broken after billing migration PR"
+video-to-pr:    search codebase → fix → PR
+video-to-skill: extract workflow → generate SKILL.md
+watch-video:    return notes to the agent
 ```
 
 ## Supported inputs
@@ -49,18 +82,6 @@ eyeroll watch ./recording.mp4 --context "checkout broken after billing migration
 | Local video files (.mp4, .webm, .mov) | Direct analysis |
 | Screenshots (.png, .jpg, .gif) | Single-frame analysis |
 | Any yt-dlp supported URL | 1000+ sites |
-
-## As a Claude Code skill
-
-eyeroll ships as a Claude Code skill. Use `/watch` in your conversations:
-
-```
-User: watch this and fix it: https://loom.com/share/abc123
-User: watch this tutorial and create a skill from it: ./demo.mp4
-User: look at this screenshot, what's wrong? [screenshot.png]
-```
-
-The skill produces structured notes, then Claude Code uses its codebase context to take action.
 
 ## Requirements
 

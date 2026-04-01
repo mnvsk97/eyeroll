@@ -4,18 +4,9 @@ description: >
   Analyze videos, screen recordings, and screenshots to generate
   structured, actionable notes for coding agents. Supports Loom,
   YouTube, and local files. Extracts visual context, on-screen text,
-  and audio narration.
-version: 0.1.0
-metadata:
-  clawdbot:
-    requires:
-      env:
-        - GEMINI_API_KEY
-      bins:
-        - python3
-        - ffmpeg
-    primaryEnv: GEMINI_API_KEY
-    homepage: https://github.com/mnvsk97/eyeroll
+  and audio narration. Use when someone shares a video and you need
+  to understand what it shows.
+compatibility: "Requires Python 3.11+, ffmpeg, GEMINI_API_KEY"
 ---
 
 # Watch Video

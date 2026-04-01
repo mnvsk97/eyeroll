@@ -1,4 +1,4 @@
-"""CLI entry point for reelfix."""
+"""CLI entry point for eyeroll."""
 
 import os
 import sys
@@ -6,14 +6,14 @@ import sys
 import click
 from dotenv import load_dotenv
 
-_ENV_PATH = os.path.join(os.path.expanduser("~"), ".reelfix", ".env")
+_ENV_PATH = os.path.join(os.path.expanduser("~"), ".eyeroll", ".env")
 load_dotenv(_ENV_PATH)
 load_dotenv()
 
 
 @click.group()
 def cli():
-    """reelfix — Watch a bug video, understand it, fix it."""
+    """eyeroll — Watch a bug video, understand it, fix it."""
 
 
 @cli.command()
@@ -49,7 +49,7 @@ def init():
             contents="Say 'ok' if you can read this.",
         )
         if response.text:
-            click.secho("Setup complete. Run `reelfix watch <video>` to get started.", fg="green")
+            click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
         else:
             click.secho("API key accepted but got empty response.", fg="yellow")
     except Exception as e:
@@ -73,11 +73,11 @@ def watch(source, context, max_frames, output, verbose):
 
     Examples:
 
-        reelfix watch https://loom.com/share/abc123
+        eyeroll watch https://loom.com/share/abc123
 
-        reelfix watch ./bug.mp4 --context "checkout broken after PR #432"
+        eyeroll watch ./bug.mp4 --context "checkout broken after PR #432"
 
-        reelfix watch screenshot.png -c "this error appears for admin users"
+        eyeroll watch screenshot.png -c "this error appears for admin users"
     """
     from .watch import watch as run_watch
 

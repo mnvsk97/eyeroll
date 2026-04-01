@@ -31,7 +31,7 @@ def watch(
     max_frames: int = 20,
     verbose: bool = False,
 ) -> str:
-    """Full pipeline: acquire media → extract → analyze → bug report.
+    """Full pipeline: acquire media → extract → analyze → report.
 
     Args:
         source: URL or local file path to video/image.
@@ -40,7 +40,7 @@ def watch(
         verbose: Print progress to stderr.
 
     Returns:
-        Markdown-formatted bug report.
+        Markdown-formatted report.
     """
     # Step 1: Acquire
     if verbose:
@@ -65,7 +65,7 @@ def watch(
         # Clean up downloaded files (not local files)
         if media["source_url"]:
             parent = os.path.dirname(file_path)
-            if parent.startswith("/tmp") or "reelfix_" in parent:
+            if parent.startswith("/tmp") or "eyeroll_" in parent:
                 shutil.rmtree(parent, ignore_errors=True)
 
 
@@ -165,10 +165,10 @@ def _wrap_report(
     media_type: str,
     context: str | None,
 ) -> str:
-    """Add metadata header to the bug report."""
-    header = f"# reelfix: {title}\n"
+    """Add metadata header to the report."""
+    header = f"# eyeroll: {title}\n"
     header += f"**Source type:** {media_type}\n"
     if context:
-        header += f"**Reporter context:** {context}\n"
+        header += f"**Context:** {context}\n"
     header += "\n---\n\n"
     return header + report

@@ -53,7 +53,7 @@ def acquire(source: str, output_dir: str | None = None) -> dict:
 def _download_url(url: str, output_dir: str | None = None) -> dict:
     ytdlp = _get_ytdlp()
     if output_dir is None:
-        output_dir = tempfile.mkdtemp(prefix="reelfix_")
+        output_dir = tempfile.mkdtemp(prefix="eyeroll_")
 
     # First, get metadata to know the title
     meta_result = subprocess.run(

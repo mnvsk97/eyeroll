@@ -80,7 +80,7 @@ def extract_key_frames(
     duration = get_video_duration(video_path)
 
     if output_dir is None:
-        output_dir = tempfile.mkdtemp(prefix="reelfix_frames_")
+        output_dir = tempfile.mkdtemp(prefix="eyeroll_frames_")
 
     # Calculate interval between frames
     num_frames = min(max_frames, max(1, int(duration)))
@@ -121,7 +121,7 @@ def extract_audio(video_path: str, output_dir: str | None = None) -> str | None:
 
     ffmpeg = _get_ffmpeg()
     if output_dir is None:
-        output_dir = tempfile.mkdtemp(prefix="reelfix_audio_")
+        output_dir = tempfile.mkdtemp(prefix="eyeroll_audio_")
 
     audio_path = os.path.join(output_dir, "audio.mp3")
     result = subprocess.run(

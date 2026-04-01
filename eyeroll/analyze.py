@@ -42,42 +42,43 @@ def _encode_image(image_path: str) -> tuple[str, str]:
     return data, mime_type
 
 
-FRAME_ANALYSIS_PROMPT = """You are analyzing a screen recording of a software bug.
+FRAME_ANALYSIS_PROMPT = """You are analyzing a screen recording.
 This is frame {frame_index} at timestamp {timestamp}.
 
 Look at this screenshot carefully and extract:
 
 1. **PAGE/URL**: What page, URL, or route is visible? (check address bar, breadcrumbs, page title)
-2. **UI STATE**: What UI elements are visible? (forms, buttons, modals, tables, navigation)
-3. **ERRORS**: Any error messages, red text, warning banners, toast notifications, error modals, console errors?
-4. **TEXT ON SCREEN**: All significant text visible — exact wording of error messages, labels, headings.
+2. **UI STATE**: What UI elements are visible? (forms, buttons, modals, tables, navigation, code editors, terminals)
+3. **TEXT ON SCREEN**: All significant text — error messages, labels, headings, code, terminal output, URLs. Quote exact wording.
+4. **ERRORS/WARNINGS**: Any error messages, red text, warning banners, toast notifications, console errors?
 5. **USER ACTION**: Any indication of what the user just did or is about to do? (cursor position, active element, form state)
+6. **WHAT'S BEING SHOWN**: What is the person demonstrating or pointing out?
 
 Be precise. Quote exact text from the screen. If you can't read something clearly, say so.
 Do NOT hallucinate or guess text you can't see clearly."""
 
-VIDEO_ANALYSIS_PROMPT = """You are analyzing a screen recording of a software bug.
+VIDEO_ANALYSIS_PROMPT = """You are analyzing a screen recording.
 The video is {duration} seconds long.
 
 Watch the entire video carefully and describe:
 
-1. **STEPS**: What is the user doing step by step? (navigating, clicking, typing, scrolling)
-2. **PAGE/URL**: What pages or routes are visited?
-3. **ERRORS**: Any error messages, failed requests, broken UI, unexpected behavior?
-4. **TEXT ON SCREEN**: Exact error messages, status codes, console output visible.
-5. **THE BUG**: What appears to go wrong? At what point does the unexpected behavior occur?
-6. **EXPECTED vs ACTUAL**: What likely should have happened vs what did happen?
+1. **STEPS**: What is the user doing step by step? (navigating, clicking, typing, scrolling, demonstrating)
+2. **PAGES/URLS**: What pages, routes, or applications are shown?
+3. **TEXT ON SCREEN**: Exact text visible — error messages, status codes, console output, code, labels, URLs.
+4. **ERRORS/ISSUES**: Any error messages, failed requests, broken UI, unexpected behavior?
+5. **WHAT'S BEING DEMONSTRATED**: What is the person showing or explaining? Is this a bug, a feature demo, a tutorial, a walkthrough?
+6. **KEY MOMENTS**: What are the most important moments or transitions in the video?
 
 Be precise. Quote exact text. Don't guess what you can't see clearly."""
 
-SYNTHESIS_PROMPT = """You are a senior developer analyzing a bug report generated from a screen recording.
+SYNTHESIS_PROMPT = """You are a senior developer analyzing a screen recording or screenshot.
 
 Here are the raw observations from the video:
 
 ## Frame-by-frame analysis:
 {frame_analyses}
 
-## Additional context from the reporter:
+## Additional context from the person who shared this:
 {context}
 
 ## Audio transcript (if available):
@@ -85,46 +86,56 @@ Here are the raw observations from the video:
 
 ---
 
-Synthesize this into a structured, actionable bug report. Output EXACTLY this format:
+Synthesize this into structured, actionable notes. Output EXACTLY this format:
 
-## Bug Report
+## Video Analysis
 
 ### Summary
-One sentence describing the bug.
+One or two sentences describing what this video shows.
 
-### Steps to Reproduce
+### What's Happening (step by step)
 1. Step one
 2. Step two
 3. ...
 
-### Error Signals
-- Exact error messages observed (quote them verbatim)
-- URLs/routes where the bug occurs
-- HTTP status codes if visible
-- Console errors if visible
+### Key Details
+- Exact text visible on screen (error messages, URLs, labels, code — quote verbatim)
+- UI elements and their state
+- HTTP status codes, console output, network requests if visible
+- Any configuration, settings, or environment info visible
 
-### Expected vs Actual Behavior
-- **Expected:** What should happen
-- **Actual:** What actually happens
+### Audio/Narration Summary
+What the person said (key points only). Or "(silent recording)" if no audio.
+
+### Observations
+- What appears to be working
+- What appears to be broken or unexpected
+- What was demonstrated or explained
 
 ### Environment Clues
 - Browser/OS if visible
-- Any version numbers, deployment info visible on screen
+- URLs, routes, deployment info
+- Any version numbers visible
 
 ### Confidence: [high/medium/low]
 State your confidence and explain what's clear vs ambiguous.
 
+### Suggested Next Steps
+Based on what was shown, what actions could a developer take?
+(e.g., fix a bug, build a feature, investigate further, create a skill, etc.)
+
 ### Clarifying Questions
-List any questions you'd ask the reporter to better understand the bug.
+List any questions that would help understand what was shown better.
 Only include if something is genuinely unclear — don't pad with generic questions.
 
 ---
 
 Rules:
 - Only include information you can actually see or hear in the recording
-- Quote error messages EXACTLY — don't paraphrase
+- Quote text from the screen EXACTLY — don't paraphrase
 - If you're unsure about something, say "unclear" rather than guessing
-- If the context text from the reporter adds useful information, incorporate it
+- If the context text adds useful information, incorporate it
+- Don't assume this is a bug — it could be a demo, tutorial, feature request, or anything else
 - Keep it concise and actionable"""
 
 

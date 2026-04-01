@@ -2,7 +2,7 @@
 
 ## Project
 
-reelfix — Watch a bug video, understand it, map it to code, fix it. Takes video URLs (Loom, YouTube), local video files, or screenshots as input. Uses Gemini Flash for vision analysis and audio transcription. Produces structured bug reports that coding agents can use to find relevant code and raise PRs.
+eyeroll — AI eyes that roll through video footage. Takes video URLs (Loom, YouTube), local video files, or screenshots as input. Uses Gemini Flash for vision analysis and audio transcription. Produces structured notes that coding agents can act on — fix bugs, build features, create skills, or anything else.
 
 ## Commands
 
@@ -17,10 +17,10 @@ pytest
 pytest --cov --cov-report=term-missing
 
 # CLI
-reelfix init                                              # set up Gemini API key
-reelfix watch <url-or-path>                               # analyze a video/screenshot
-reelfix watch <url> --context "broken after PR #432"      # with reporter context
-reelfix watch <path> --verbose --output report.md         # verbose + write to file
+eyeroll init                                              # set up Gemini API key
+eyeroll watch <url-or-path>                               # analyze a video/screenshot
+eyeroll watch <url> --context "broken after PR #432"      # with reporter context
+eyeroll watch <path> --verbose --output report.md         # verbose + write to file
 ```
 
 ## Architecture

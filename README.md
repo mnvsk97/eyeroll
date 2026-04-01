@@ -1,35 +1,43 @@
-# reelfix
+# eyeroll
 
-Watch a bug video. Understand it. Fix it.
+AI eyes that roll through video footage — watch, understand, act.
 
-reelfix analyzes screen recordings, Loom videos, YouTube links, and screenshots to produce structured bug reports that AI coding agents can use to find and fix the issue.
+eyeroll analyzes screen recordings, Loom videos, YouTube links, and screenshots, then produces structured notes that AI coding agents can act on — fix bugs, build features, create skills, generate subagents, or anything else.
 
 ## How it works
 
 ```
-Bug video (Loom / YouTube / local file / screenshot)
+Video (Loom / YouTube / local file / screenshot)
     ↓
-reelfix extracts: frames, audio, on-screen text
+eyeroll extracts: frames, audio, on-screen text
     ↓
-Gemini Flash analyzes: what happened, what went wrong, exact errors
+Gemini Flash analyzes: what's shown, what's said, what's on screen
     ↓
-Structured bug report: steps to reproduce, error signals, diagnosis
+Structured notes: what happened, key details, actionable context
     ↓
-Feed to Claude Code / Codex → codebase search → fix → PR
+Feed to Claude Code / Codex → understand → act
 ```
+
+## Use cases
+
+- **Bug video → fix → PR**: QA sends a recording, eyeroll understands the bug, agent fixes it
+- **Demo video → build feature**: Watch a product demo, build something similar
+- **Tutorial → skill/plugin**: Watch a walkthrough, generate a skill from it
+- **Architecture video → implementation**: Watch a design review, implement it
+- **Any video → structured notes**: Turn any screen recording into actionable developer context
 
 ## Quick start
 
 ```bash
 pip install .
-reelfix init          # set up Gemini API key
-reelfix watch https://loom.com/share/abc123
+eyeroll init          # set up Gemini API key
+eyeroll watch https://loom.com/share/abc123
 ```
 
-With reporter context (significantly improves quality):
+With context (significantly improves quality):
 
 ```bash
-reelfix watch ./bug.mp4 --context "checkout broken after billing migration PR"
+eyeroll watch ./recording.mp4 --context "checkout broken after billing migration PR"
 ```
 
 ## Supported inputs
@@ -44,13 +52,15 @@ reelfix watch ./bug.mp4 --context "checkout broken after billing migration PR"
 
 ## As a Claude Code skill
 
-reelfix ships as a Claude Code skill. Install it and use `/watch` in your conversations:
+eyeroll ships as a Claude Code skill. Use `/watch` in your conversations:
 
 ```
-/watch https://loom.com/share/abc123 --context "payments page is broken"
+User: watch this and fix it: https://loom.com/share/abc123
+User: watch this tutorial and create a skill from it: ./demo.mp4
+User: look at this screenshot, what's wrong? [screenshot.png]
 ```
 
-The skill produces a bug report, then Claude Code uses its codebase context to find relevant files, diagnose the issue, and optionally raise a PR.
+The skill produces structured notes, then Claude Code uses its codebase context to take action.
 
 ## Requirements
 

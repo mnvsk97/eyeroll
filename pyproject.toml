@@ -1,7 +1,7 @@
 [project]
-name = "reelfix"
+name = "eyeroll"
 version = "0.1.0"
-description = "Watch a bug video, understand it, map it to code, fix it."
+description = "AI eyes that roll through video footage — watch, understand, turn into code actions."
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.1",
@@ -12,14 +12,14 @@ dependencies = [
 ]
 
 [project.scripts]
-reelfix = "reelfix.cli:cli"
+eyeroll = "eyeroll.cli:cli"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["reelfix"]
+packages = ["eyeroll"]
 
 [dependency-groups]
 test = [

@@ -85,7 +85,7 @@ def test_gemini_backend_no_api_key():
     env = {k: v for k, v in os.environ.items() if k != "GEMINI_API_KEY"}
     with patch.dict(os.environ, env, clear=True), \
          patch.dict("sys.modules", {"google": MagicMock(), "google.genai": mock_genai}):
-        with pytest.raises(AnalysisError, match="GEMINI_API_KEY is not set"):
+        with pytest.raises(AnalysisError, match="No Gemini credentials found"):
             GeminiBackend()
 
 

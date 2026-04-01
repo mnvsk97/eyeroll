@@ -65,16 +65,64 @@ class GeminiBackend(Backend):
     def __init__(self, model: str = "gemini-2.0-flash"):
         from google import genai
         api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
+        credentials, project = self._load_service_account()
+
+        if api_key:
+            self._client = genai.Client(api_key=api_key)
+        elif credentials:
+            self._client = genai.Client(
+                vertexai=True,
+                credentials=credentials,
+                project=project or os.environ.get("GOOGLE_CLOUD_PROJECT"),
+                location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
+            )
+        else:
             raise AnalysisError(
-                "GEMINI_API_KEY is not set.\n\n"
-                "Get a free key at: https://aistudio.google.com/apikey\n"
-                "Then: export GEMINI_API_KEY=your-key\n\n"
-                "Or use a local model instead (no API key needed):\n"
+                "No Gemini credentials found.\n\n"
+                "Option 1 — API key:\n"
+                "  Get a free key at: https://aistudio.google.com/apikey\n"
+                "  Then: export GEMINI_API_KEY=your-key\n\n"
+                "Option 2 — Service account:\n"
+                "  export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json\n\n"
+                "Option 3 — Local model (no credentials needed):\n"
                 "  eyeroll watch <source> --backend ollama"
             )
-        self._client = genai.Client(api_key=api_key)
         self._model = model
+
+    @staticmethod
+    def _load_service_account():
+        """Try to load Google service account credentials.
+
+        Checks GOOGLE_APPLICATION_CREDENTIALS env var, then common paths.
+        Returns (credentials, project_id) or (None, None).
+        """
+        creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if not creds_path:
+            # Check common locations
+            for candidate in [
+                os.path.join(os.path.expanduser("~"), ".eyeroll", "credentials.json"),
+                "credentials.json",
+            ]:
+                if os.path.isfile(candidate):
+                    creds_path = candidate
+                    break
+
+        if not creds_path or not os.path.isfile(creds_path):
+            return None, None
+
+        try:
+            from google.oauth2 import service_account
+            credentials = service_account.Credentials.from_service_account_file(
+                creds_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            # Extract project ID from the credentials file
+            import json
+            with open(creds_path) as f:
+                project_id = json.load(f).get("project_id")
+            return credentials, project_id
+        except Exception:
+            return None, None
 
     def analyze_image(self, image_path: str, prompt: str, verbose: bool = False) -> str:
         from google.genai import types
@@ -221,7 +269,7 @@ class OllamaBackend(Backend):
             method="POST",
         )
 
-        with urllib.request.urlopen(req, timeout=300) as resp:
+        with urllib.request.urlopen(req, timeout=600) as resp:
             data = json.loads(resp.read())
 
         return data.get("response", "")

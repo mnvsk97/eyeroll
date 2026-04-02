@@ -2,51 +2,49 @@
 
 AI eyes that roll through video footage — watch, understand, act.
 
-eyeroll is a collection of AI coding agent skills that analyze screen recordings, Loom videos, YouTube links, and screenshots, then turn them into code actions.
+eyeroll analyzes screen recordings, Loom videos, YouTube links, and screenshots, then produces structured reports that coding agents can act on — fix bugs, build features, create skills.
 
 ## Skills
 
 | Skill | What it does |
 |-------|-------------|
-| **watch-video** | Watch a video and produce structured notes |
+| **init** | Set up eyeroll — pick a backend, configure API key, generate codebase context |
+| **watch-video** | Watch a video and produce structured notes grounded in codebase context |
 | **video-to-pr** | Watch a bug video → diagnose → fix → raise PR |
 | **video-to-skill** | Watch a tutorial/demo → generate a Claude Code skill |
+| **history** | List and manage past video analyses |
 
 ## Install
 
 ```bash
-# Install all skills
+# Install skills for Claude Code
 npx skills add mnvsk97/eyeroll
 
-# Install a specific skill
-npx skills add mnvsk97/eyeroll@video-to-pr
-npx skills add mnvsk97/eyeroll@video-to-skill
-npx skills add mnvsk97/eyeroll@watch-video
+# Install CLI
+pip install eyeroll              # core (Ollama only)
+pip install eyeroll[gemini]      # + Gemini Flash API
+pip install eyeroll[openai]      # + OpenAI GPT-4o
+pip install eyeroll[all]         # everything
+
+# For URL downloads (Loom, YouTube)
+brew install yt-dlp
 ```
 
 ## Setup
 
 ```bash
-pip install eyeroll
-brew install yt-dlp    # for URL downloads (Loom, YouTube)
+eyeroll init
 ```
 
-### Option A: Gemini (default, API-based)
+Interactive setup — pick your backend and configure:
 
-```bash
-eyeroll init           # or: export GEMINI_API_KEY=your-key
 ```
+Which backend do you want to use?
 
-Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Supports direct video upload, audio transcription. ~$0.15 per analysis.
-
-### Option B: Ollama + Qwen3-VL (local, private, free)
-
-```bash
-brew install ollama    # install Ollama
-ollama serve           # start the server
+  1. gemini  — Google Gemini Flash API (fast, cheap, best quality)
+  2. openai  — OpenAI GPT-4o (great vision, Whisper audio)
+  3. ollama  — Local models via Ollama (private, no API key)
 ```
-
-No API key needed. The model is pulled automatically on first use (~6GB for qwen3-vl:8b). Runs entirely on your machine.
 
 ## Usage
 
@@ -66,67 +64,116 @@ User: look at this recording, what's going on?
 ### Standalone CLI
 
 ```bash
-# Gemini (default)
+# Basic
 eyeroll watch https://loom.com/share/abc123
 eyeroll watch ./bug.mp4 --context "checkout broken after PR #432"
 
-# Ollama (local)
-eyeroll watch ./bug.mp4 --backend ollama
-eyeroll watch screenshot.png -b ollama -m qwen3-vl:2b
+# With codebase context (inline or file)
+eyeroll watch ./bug.mp4 -cc .eyeroll/context.md
+eyeroll watch ./bug.mp4 -cc "FastAPI app, key files: src/api/routes.py"
 
-# Or set as default
-export EYEROLL_BACKEND=ollama
-eyeroll watch ./recording.mp4
+# Backends
+eyeroll watch ./bug.mp4 --backend openai
+eyeroll watch ./bug.mp4 -b ollama -m qwen3-vl:2b
+
+# Performance
+eyeroll watch ./bug.mp4 --parallel 4          # 3-5x faster frame analysis
+eyeroll watch ./bug.mp4 --no-cache            # force fresh analysis
+
+# History
+eyeroll history                               # list past analyses
+eyeroll history --json                        # JSON output
+eyeroll history clear                         # clear cache
 ```
 
 ## Backends
 
 | Backend | Video | Audio | API Key | Cost | Best for |
 |---------|-------|-------|---------|------|----------|
-| **gemini** | Direct upload | Yes | Required | ~$0.15/video | Best quality, short videos |
+| **gemini** | Direct upload | Gemini native | GEMINI_API_KEY | ~$0.15/video | Best quality, short videos |
+| **openai** | Frame-by-frame | Whisper | OPENAI_API_KEY | ~$0.20/video | If you already have an OpenAI key |
 | **ollama** | Frame-by-frame | No | None | Free | Privacy, offline, no API limits |
-
-### Ollama models
-
-| Model | Size | Notes |
-|-------|------|-------|
-| `qwen3-vl` (default) | 6.1GB | Best quality, needs 8GB+ RAM |
-| `qwen3-vl:2b` | 1.9GB | Lighter, works on 8GB machines |
-| `qwen3-vl:32b` | 21GB | Higher quality, needs 32GB+ RAM |
 
 ## How it works
 
 ```
 Video (Loom / YouTube / local file / screenshot)
     ↓
-eyeroll extracts: frames, audio, on-screen text
+1. Acquire: download via yt-dlp or read local file
     ↓
-Backend analyzes: Gemini Flash (API) or Qwen3-VL (local via Ollama)
+2. Extract: scene detection picks frames where screen changes
+           + audio extraction
     ↓
-Structured notes → skill decides what to do next
+3. Analyze: vision model reads each frame (parallel)
+          + audio transcription
     ↓
-video-to-pr:    search codebase → fix → PR
-video-to-skill: extract workflow → generate SKILL.md
-watch-video:    return notes to the agent
+4. Cache: store intermediates for instant re-use
+    ↓
+5. Synthesize: combine observations + codebase context
+             into structured report with:
+             - Bug Description
+             - Fix Directions (grounded in codebase context)
+             - Suggested search patterns
+    ↓
+Skills decide what to do next:
+  video-to-pr:    search codebase → fix → PR
+  video-to-skill: extract workflow → generate SKILL.md
+  watch-video:    return report to the agent
 ```
+
+## Codebase context
+
+eyeroll produces better reports when it knows about your project. The `/eyeroll:init` skill generates `.eyeroll/context.md` — a concise summary of your project that gets passed to the analysis.
+
+```bash
+# Claude Code generates context automatically via /eyeroll:init
+# Or pass it manually:
+eyeroll watch video.mp4 -cc .eyeroll/context.md
+
+# The report's Fix Directions will reference actual files in your project
+# instead of hallucinating paths.
+```
+
+Without codebase context, all file paths in the report are labeled as hypotheses.
 
 ## Supported inputs
 
-| Input | Notes |
-|-------|-------|
-| Loom URLs | Requires yt-dlp |
-| YouTube URLs | Requires yt-dlp |
-| Local video files (.mp4, .webm, .mov) | Direct analysis |
-| Screenshots (.png, .jpg, .gif) | Single-frame analysis |
-| Any yt-dlp supported URL | 1000+ sites |
+| Input | Formats |
+|-------|---------|
+| **Video** | .mp4, .webm, .mov, .avi, .mkv, .flv, .ts, .m4v, .wmv, .3gp, .mpg, .mpeg, .ogv, .m2ts, .mts |
+| **Image** | .png, .jpg, .jpeg, .gif, .webp, .bmp, .tiff, .tif, .heic, .heif, .avif |
+| **URL** | YouTube, Loom, Vimeo, Twitter/X, Reddit, and 1000+ sites via yt-dlp |
+
+## Caching
+
+eyeroll caches intermediate analysis results (frame analyses, transcript) in `.eyeroll/cache/`. Same video = instant result, no API cost. Different `--context` or `--codebase-context` re-runs only the cheap synthesis step.
+
+```bash
+eyeroll watch video.mp4                    # full analysis (~15s)
+eyeroll watch video.mp4 -c "new context"   # instant — reuses cached frames
+eyeroll watch video.mp4 --no-cache         # force fresh analysis
+eyeroll history                            # see all cached analyses
+```
 
 ## Requirements
 
 - Python 3.11+
 - ffmpeg (`brew install ffmpeg`)
-- yt-dlp (`brew install yt-dlp`) — for URL downloads
-- **Gemini backend:** Gemini API key ([free](https://aistudio.google.com/apikey))
-- **Ollama backend:** [Ollama](https://ollama.com) installed and running
+- yt-dlp (`brew install yt-dlp` or `pip install eyeroll[download]`) — for URL downloads
+
+## Development
+
+```bash
+git clone https://github.com/mnvsk97/eyeroll.git
+cd eyeroll
+pip install -e '.[dev,all]'
+
+# Unit tests (143 tests, all mocked)
+pytest
+
+# Integration tests (real API calls, run before releases)
+pytest tests/test_integration.py -v -m integration
+```
 
 ## License
 

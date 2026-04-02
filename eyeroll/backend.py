@@ -141,7 +141,7 @@ class GeminiBackend(Backend):
 
         response = self._client.models.generate_content(
             model=self._model,
-            contents=types.Content(parts=[
+            contents=types.Content(role="user", parts=[
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                 types.Part(text=prompt),
             ]),
@@ -154,7 +154,7 @@ class GeminiBackend(Backend):
             video_bytes = f.read()
         response = self._client.models.generate_content(
             model=self._model,
-            contents=types.Content(parts=[
+            contents=types.Content(role="user", parts=[
                 types.Part.from_bytes(data=video_bytes, mime_type="video/mp4"),
                 types.Part(text=prompt),
             ]),
@@ -167,7 +167,7 @@ class GeminiBackend(Backend):
             audio_bytes = f.read()
         response = self._client.models.generate_content(
             model=self._model,
-            contents=types.Content(parts=[
+            contents=types.Content(role="user", parts=[
                 types.Part.from_bytes(data=audio_bytes, mime_type="audio/mp3"),
                 types.Part(text=prompt),
             ]),

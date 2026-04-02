@@ -159,8 +159,8 @@ class TestCacheIntegration:
         report2 = watch(test_video, backend_name="gemini")
         second_duration = time.time() - t0
 
-        # Cache hit should be much faster
-        assert second_duration < first_duration / 2
+        # Cache hit should be faster (synthesis still runs, so not instant)
+        assert second_duration < first_duration
         assert "# eyeroll:" in report1
         assert "# eyeroll:" in report2
 

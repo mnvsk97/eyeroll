@@ -287,12 +287,61 @@ class OllamaBackend(Backend):
             with urllib.request.urlopen(req, timeout=5) as resp:
                 pass
         except (urllib.error.URLError, ConnectionRefusedError, OSError):
+            # Try to install and start Ollama automatically
+            if self._try_install_ollama():
+                return
             raise AnalysisError(
                 f"Cannot connect to Ollama at {self._host}.\n\n"
                 "Make sure Ollama is running:\n"
                 "  ollama serve\n\n"
                 "Install Ollama: https://ollama.com"
             )
+
+    def _try_install_ollama(self) -> bool:
+        """Try to install Ollama and start the server. Returns True if successful."""
+        import platform
+        import shutil
+        import subprocess
+        import time
+        import urllib.request
+
+        # Check if ollama binary exists but server isn't running
+        if shutil.which("ollama"):
+            print("  Ollama found but not running. Starting ollama serve...", file=sys.stderr)
+        else:
+            # Install Ollama
+            if platform.system() not in ("Darwin", "Linux"):
+                return False
+            print("  Ollama not found. Installing...", file=sys.stderr)
+            try:
+                subprocess.run(
+                    ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"],
+                    check=True, timeout=120,
+                )
+                print("  Ollama installed.", file=sys.stderr)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+                return False
+
+        # Start ollama serve in the background
+        try:
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            # Wait for server to be ready
+            for _ in range(10):
+                time.sleep(1)
+                try:
+                    req = urllib.request.Request(f"{self._host}/api/tags")
+                    with urllib.request.urlopen(req, timeout=3):
+                        print("  Ollama is running.", file=sys.stderr)
+                        return True
+                except Exception:
+                    continue
+        except FileNotFoundError:
+            pass
+        return False
 
     def _check_model(self):
         """Pull the model if not already available."""

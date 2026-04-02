@@ -1,5 +1,6 @@
 """CLI entry point for eyeroll."""
 
+import json
 import os
 import sys
 
@@ -42,7 +43,14 @@ def init():
     click.echo("Validating API key...")
 
     try:
-        from google import genai
+        try:
+            from google import genai
+        except ImportError:
+            click.secho(
+                "Gemini backend requires google-genai. Install with: pip install eyeroll[gemini]",
+                fg="red", err=True,
+            )
+            raise SystemExit(1)
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
             model="gemini-2.0-flash",
@@ -136,3 +144,81 @@ def watch(source, context, codebase_context, max_frames, backend, model, no_cach
             traceback.print_exc()
         click.secho(f"Error: {e}", fg="red", err=True)
         raise SystemExit(1)
+
+
+# ---------------------------------------------------------------------------
+# eyeroll history
+# ---------------------------------------------------------------------------
+
+@cli.group(invoke_without_command=True)
+@click.option("--limit", "-n", default=None, type=int,
+              help="Show only the last N analyses.")
+@click.option("--json", "as_json", is_flag=True,
+              help="Output as JSON for programmatic use.")
+@click.pass_context
+def history(ctx, limit, as_json):
+    """List and manage past video analyses from the cache.
+
+    \b
+    Without a subcommand, lists all cached analyses.
+    Use 'eyeroll history clear' to remove cached data.
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+
+    _print_history(limit, as_json)
+
+
+def _print_history(limit, as_json):
+    """Shared logic for printing history entries."""
+    from .history import list_history
+
+    entries = list_history(limit=limit)
+
+    if as_json:
+        click.echo(json.dumps(entries, indent=2))
+        return
+
+    if not entries:
+        click.echo("No cached analyses found.")
+        return
+
+    for entry in entries:
+        ts = entry.get("timestamp", "unknown")
+        # Format ISO timestamp to readable form
+        if ts != "unknown":
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(ts)
+                ts = dt.strftime("%Y-%m-%d %H:%M")
+            except (ValueError, TypeError):
+                pass
+
+        source = entry.get("source", "unknown")
+        key = entry.get("key", "?")
+        media_type = entry.get("media_type", "")
+
+        if media_type:
+            click.echo(f"[{ts}] {source} ({media_type}) -- {key}")
+        else:
+            click.echo(f"[{ts}] {source} -- {key}")
+
+
+@history.command(name="clear")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+def history_clear(yes):
+    """Clear all cached analyses."""
+    from .history import clear_history, list_history
+
+    entries = list_history()
+    if not entries:
+        click.echo("Cache is already empty.")
+        return
+
+    if not yes:
+        if not click.confirm(f"Delete {len(entries)} cached analysis(es)?", default=False):
+            click.echo("Aborted.")
+            return
+
+    clear_history()
+    click.secho(f"Cleared {len(entries)} cached analysis(es).", fg="green")

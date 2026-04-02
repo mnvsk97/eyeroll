@@ -23,9 +23,7 @@ classifiers = [
 dependencies = [
     "click>=8.1",
     "python-dotenv>=1.0",
-    "google-genai>=1.0",
     "imageio-ffmpeg>=0.5",
-    "yt-dlp>=2024.0",
 ]
 
 [project.urls]
@@ -37,6 +35,16 @@ Issues = "https://github.com/mnvsk97/eyeroll/issues"
 eyeroll = "eyeroll.cli:cli"
 
 [project.optional-dependencies]
+gemini = [
+    "google-genai>=1.0",
+]
+download = [
+    "yt-dlp>=2024.0",
+]
+all = [
+    "google-genai>=1.0",
+    "yt-dlp>=2024.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

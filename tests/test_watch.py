@@ -313,10 +313,23 @@ def test_cache_key_url():
 
 
 def test_cache_save_and_load(tmp_path):
+    intermediates = {
+        "title": "test_video",
+        "media_type": "video (00:30)",
+        "frame_analyses": [{"frame_index": 0, "timestamp": 0.0, "analysis": "test"}],
+        "video_analysis": None,
+        "transcript": None,
+    }
     with patch("eyeroll.watch.CACHE_DIR", str(tmp_path)):
-        _cache_save("testkey", "https://example.com/video", "# Report content")
+        _cache_save("testkey", "https://example.com/video", intermediates)
         result = _cache_load("testkey")
-    assert result == "# Report content"
+    assert result is not None
+    assert result["title"] == "test_video"
+    assert result["media_type"] == "video (00:30)"
+    assert result["frame_analyses"] == [{"frame_index": 0, "timestamp": 0.0, "analysis": "test"}]
+    assert result["video_analysis"] is None
+    assert result["transcript"] is None
+    assert result["source"] == "https://example.com/video"
 
 
 def test_cache_load_miss(tmp_path):
@@ -325,21 +338,73 @@ def test_cache_load_miss(tmp_path):
 
 
 def test_watch_returns_cached_report(tmp_image_path):
-    """When cache hits, watch returns cached report without running analysis."""
+    """When cache hits, watch re-runs synthesis but skips analysis."""
     mock_backend = MagicMock()
     mock_backend.supports_video = True
     mock_backend.supports_audio = True
 
+    cached_intermediates = {
+        "title": "test_image",
+        "media_type": "screenshot",
+        "frame_analyses": [{"frame_index": 0, "timestamp": 0.0, "analysis": "cached analysis"}],
+        "video_analysis": None,
+        "transcript": None,
+    }
+
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
-         patch("eyeroll.watch._cache_load", return_value="# Cached report"), \
+         patch("eyeroll.watch._cache_load", return_value=cached_intermediates), \
          patch("eyeroll.watch.acquire") as mock_acquire, \
-         patch("eyeroll.watch.analyze_frames") as mock_af:
-        result = watch(tmp_image_path)
+         patch("eyeroll.watch.analyze_frames") as mock_af, \
+         patch("eyeroll.watch.synthesize_report", return_value="## Synthesized from cache") as mock_sr:
+        result = watch(tmp_image_path, context="some context")
 
-    assert result == "# Cached report"
+    # Should NOT run acquire or analyze_frames
     mock_acquire.assert_not_called()
     mock_af.assert_not_called()
+    # Should run synthesize_report with cached intermediates + current context
+    mock_sr.assert_called_once()
+    assert mock_sr.call_args[1]["context"] == "some context"
+    assert mock_sr.call_args[1]["frame_analyses"] == cached_intermediates["frame_analyses"]
+    # Final report should include header + synthesized content
+    assert "# eyeroll:" in result
+    assert "Synthesized from cache" in result
+
+
+def test_watch_cache_different_context_different_reports(tmp_image_path):
+    """Same cached video with different --context produces different reports."""
+    mock_backend = MagicMock()
+    mock_backend.supports_video = True
+    mock_backend.supports_audio = True
+
+    cached_intermediates = {
+        "title": "test_image",
+        "media_type": "screenshot",
+        "frame_analyses": [{"frame_index": 0, "timestamp": 0.0, "analysis": "cached analysis"}],
+        "video_analysis": None,
+        "transcript": None,
+    }
+
+    def synth_side_effect(**kwargs):
+        ctx = kwargs.get("context") or "none"
+        return f"## Report with context: {ctx}"
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=cached_intermediates), \
+         patch("eyeroll.watch.synthesize_report", side_effect=synth_side_effect) as mock_sr:
+        result1 = watch(tmp_image_path, context="bug in login")
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=cached_intermediates), \
+         patch("eyeroll.watch.synthesize_report", side_effect=synth_side_effect) as mock_sr:
+        result2 = watch(tmp_image_path, context="feature request for dashboard")
+
+    # Both should use cached intermediates but produce different reports
+    assert "bug in login" in result1
+    assert "feature request for dashboard" in result2
+    assert result1 != result2
 
 
 def test_watch_no_cache_flag_skips_cache(tmp_image_path):

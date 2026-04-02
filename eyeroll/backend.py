@@ -63,7 +63,12 @@ class GeminiBackend(Backend):
     """Google Gemini Flash API backend."""
 
     def __init__(self, model: str = "gemini-2.0-flash"):
-        from google import genai
+        try:
+            from google import genai
+        except ImportError:
+            raise ImportError(
+                "Gemini backend requires google-genai. Install with: pip install eyeroll[gemini]"
+            )
         api_key = os.environ.get("GEMINI_API_KEY")
         credentials, project = self._load_service_account()
 

@@ -70,14 +70,23 @@ def watch(
         if codebase_context:
             print("  Codebase context provided", file=sys.stderr)
 
-    # Check cache
+    # Check cache for intermediate results
     cache_key = _cache_key(source, backend_label, model)
     if not no_cache:
         cached = _cache_load(cache_key)
         if cached:
             if verbose:
-                print("  Cache hit — returning stored report", file=sys.stderr)
-            return cached
+                print("  Cache hit — reusing cached analysis, re-running synthesis", file=sys.stderr)
+            # Re-run synthesis with current context/codebase_context
+            report = synthesize_report(
+                frame_analyses=cached.get("frame_analyses"),
+                video_analysis=cached.get("video_analysis"),
+                transcript=cached.get("transcript"),
+                context=context,
+                codebase_context=codebase_context,
+                verbose=verbose,
+            )
+            return _wrap_report(report, cached["title"], cached["media_type"], context, backend_label)
 
     # Step 1: Acquire
     if verbose:
@@ -95,13 +104,25 @@ def watch(
 
     try:
         if media_type == "image":
-            report = _analyze_image(file_path, context, codebase_context, title, backend_label, verbose)
+            intermediates = _analyze_image(file_path, title, backend_label, verbose)
         else:
-            report = _analyze_video(
-                file_path, context, codebase_context, title, max_frames, backend, backend_label, verbose,
+            intermediates = _analyze_video(
+                file_path, title, max_frames, backend, backend_label, verbose,
             )
-        _cache_save(cache_key, source, report)
-        return report
+
+        # Cache intermediates (before synthesis)
+        _cache_save(cache_key, source, intermediates)
+
+        # Synthesis always runs fresh with current context
+        report = synthesize_report(
+            frame_analyses=intermediates["frame_analyses"],
+            video_analysis=intermediates["video_analysis"],
+            transcript=intermediates["transcript"],
+            context=context,
+            codebase_context=codebase_context,
+            verbose=verbose,
+        )
+        return _wrap_report(report, title, intermediates["media_type"], context, backend_label)
     finally:
         # Clean up downloaded files (not local files)
         if media["source_url"]:
@@ -113,13 +134,11 @@ def watch(
 
 def _analyze_image(
     file_path: str,
-    context: str | None,
-    codebase_context: str | None,
     title: str,
     backend_label: str,
     verbose: bool,
-) -> str:
-    """Analyze a single screenshot/image."""
+) -> dict:
+    """Analyze a single screenshot/image. Returns intermediates dict."""
     frames = [{
         "frame_path": file_path,
         "timestamp": 0.0,
@@ -128,27 +147,24 @@ def _analyze_image(
 
     frame_analyses = analyze_frames(frames, verbose=verbose)
 
-    report = synthesize_report(
-        frame_analyses=frame_analyses,
-        context=context,
-        codebase_context=codebase_context,
-        verbose=verbose,
-    )
-
-    return _wrap_report(report, title, "screenshot", context, backend_label)
+    return {
+        "title": title,
+        "media_type": "screenshot",
+        "frame_analyses": frame_analyses,
+        "video_analysis": None,
+        "transcript": None,
+    }
 
 
 def _analyze_video(
     file_path: str,
-    context: str | None,
-    codebase_context: str | None,
     title: str,
     max_frames: int,
     backend,
     backend_label: str,
     verbose: bool,
-) -> str:
-    """Analyze a video file."""
+) -> dict:
+    """Analyze a video file. Returns intermediates dict."""
     duration = get_video_duration(file_path)
     file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
 
@@ -198,16 +214,13 @@ def _analyze_video(
     elif verbose and not backend.supports_audio:
         print("  Skipping audio (not supported by this backend)", file=sys.stderr)
 
-    report = synthesize_report(
-        frame_analyses=frame_analyses,
-        video_analysis=video_analysis,
-        transcript=transcript,
-        context=context,
-        codebase_context=codebase_context,
-        verbose=verbose,
-    )
-
-    return _wrap_report(report, title, f"video ({fmt_timestamp(duration)})", context, backend_label)
+    return {
+        "title": title,
+        "media_type": f"video ({fmt_timestamp(duration)})",
+        "frame_analyses": frame_analyses,
+        "video_analysis": video_analysis,
+        "transcript": transcript,
+    }
 
 
 def _wrap_report(
@@ -246,28 +259,47 @@ def _cache_key(source: str, backend: str, model: str | None) -> str:
     return hashlib.sha256(key_input.encode()).hexdigest()[:16]
 
 
-def _cache_load(key: str) -> str | None:
-    """Load a cached report if it exists."""
-    meta_path = os.path.join(CACHE_DIR, f"{key}.json")
-    report_path = os.path.join(CACHE_DIR, f"{key}.md")
-    if os.path.isfile(meta_path) and os.path.isfile(report_path):
-        with open(report_path) as f:
-            return f.read()
+def _cache_load(key: str) -> dict | None:
+    """Load cached intermediates if they exist.
+
+    Returns a dict with keys: source, title, media_type, frame_analyses,
+    video_analysis, transcript — or None if no cache entry exists.
+    """
+    cache_path = os.path.join(CACHE_DIR, f"{key}.json")
+    if os.path.isfile(cache_path):
+        try:
+            with open(cache_path) as f:
+                data = json.load(f)
+            # Verify it's the new intermediate format (has 'media_type' key)
+            if "media_type" in data:
+                return data
+        except (json.JSONDecodeError, OSError):
+            pass
     return None
 
 
-def _cache_save(key: str, source: str, report: str) -> None:
-    """Save a report to cache."""
+def _cache_save(key: str, source: str, intermediates: dict) -> None:
+    """Save intermediate analysis results to cache.
+
+    Args:
+        key: Cache key.
+        source: Original source (URL or file path).
+        intermediates: Dict with title, media_type, frame_analyses,
+            video_analysis, transcript.
+    """
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
-        meta = {
+        cache_data = {
             "source": source,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "key": key,
+            "title": intermediates["title"],
+            "media_type": intermediates["media_type"],
+            "frame_analyses": intermediates.get("frame_analyses"),
+            "video_analysis": intermediates.get("video_analysis"),
+            "transcript": intermediates.get("transcript"),
         }
         with open(os.path.join(CACHE_DIR, f"{key}.json"), "w") as f:
-            json.dump(meta, f, indent=2)
-        with open(os.path.join(CACHE_DIR, f"{key}.md"), "w") as f:
-            f.write(report)
+            json.dump(cache_data, f, indent=2)
     except OSError:
         pass  # cache write failure is not fatal

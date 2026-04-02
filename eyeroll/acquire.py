@@ -3,6 +3,7 @@
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -56,6 +57,20 @@ def acquire(source: str, output_dir: str | None = None) -> dict:
     return _resolve_local(source)
 
 
+def _try_update_ytdlp() -> bool:
+    """Attempt to update yt-dlp via pip. Returns True if successful, False otherwise."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def _download_url(url: str, output_dir: str | None = None) -> dict:
     ytdlp = _get_ytdlp()
     if output_dir is None:
@@ -94,10 +109,33 @@ def _download_url(url: str, output_dir: str | None = None) -> dict:
     )
 
     if result.returncode != 0:
-        raise RuntimeError(
-            f"yt-dlp failed to download: {url}\n\n"
-            f"stderr: {result.stderr[:500]}"
-        )
+        # Try updating yt-dlp and retrying once
+        print("Download failed. Updating yt-dlp and retrying...", file=sys.stderr)
+        if _try_update_ytdlp():
+            retry_result = subprocess.run(
+                [
+                    ytdlp,
+                    "--no-playlist",
+                    "--merge-output-format", "mp4",
+                    "-o", output_template,
+                    url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            if retry_result.returncode == 0:
+                result = retry_result
+            else:
+                raise RuntimeError(
+                    f"yt-dlp failed to download: {url}\n\n"
+                    f"stderr: {result.stderr[:500]}"
+                )
+        else:
+            raise RuntimeError(
+                f"yt-dlp failed to download: {url}\n\n"
+                f"stderr: {result.stderr[:500]}"
+            )
 
     # Find the downloaded file
     downloaded = _find_media_file(output_dir)

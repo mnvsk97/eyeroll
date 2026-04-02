@@ -15,6 +15,7 @@ from eyeroll.acquire import (
     _get_ytdlp,
     _is_url,
     _resolve_local,
+    _try_update_ytdlp,
 )
 
 
@@ -158,7 +159,8 @@ def test_download_url_ytdlp_failure():
 
     with patch("eyeroll.acquire.shutil.which", return_value="/usr/bin/yt-dlp"), \
          patch("eyeroll.acquire.subprocess.run", side_effect=[meta_result, dl_result]), \
-         patch("eyeroll.acquire.tempfile.mkdtemp", return_value="/tmp/eyeroll_test"):
+         patch("eyeroll.acquire.tempfile.mkdtemp", return_value="/tmp/eyeroll_test"), \
+         patch("eyeroll.acquire._try_update_ytdlp", return_value=False):
         with pytest.raises(RuntimeError, match="yt-dlp failed to download"):
             _download_url("https://example.com/bad-url")
 
@@ -173,3 +175,50 @@ def test_download_url_no_media_file_found():
          patch("eyeroll.acquire._find_media_file", return_value=None):
         with pytest.raises(RuntimeError, match="no media file found"):
             _download_url("https://example.com/video")
+
+
+# ---------------------------------------------------------------------------
+# yt-dlp auto-update + retry
+# ---------------------------------------------------------------------------
+
+def test_download_url_retry_succeeds_after_update():
+    """Download fails, yt-dlp updates successfully, retry succeeds."""
+    meta_result = MagicMock(returncode=0, stdout="{}", stderr="")
+    dl_fail = MagicMock(returncode=1, stdout="", stderr="ERROR: outdated")
+    dl_retry_ok = MagicMock(returncode=0, stdout="", stderr="")
+
+    with patch("eyeroll.acquire.shutil.which", return_value="/usr/bin/yt-dlp"), \
+         patch("eyeroll.acquire.subprocess.run", side_effect=[meta_result, dl_fail, dl_retry_ok]), \
+         patch("eyeroll.acquire.tempfile.mkdtemp", return_value="/tmp/eyeroll_test"), \
+         patch("eyeroll.acquire._try_update_ytdlp", return_value=True), \
+         patch("eyeroll.acquire._find_media_file", return_value="/tmp/eyeroll_test/video.mp4"):
+        result = _download_url("https://example.com/video")
+        assert result["file_path"] == "/tmp/eyeroll_test/video.mp4"
+        assert result["media_type"] == "video"
+
+
+def test_download_url_update_fails_raises_error():
+    """Download fails, yt-dlp update fails, original error is raised."""
+    meta_result = MagicMock(returncode=0, stdout="{}", stderr="")
+    dl_fail = MagicMock(returncode=1, stdout="", stderr="ERROR: unable to download")
+
+    with patch("eyeroll.acquire.shutil.which", return_value="/usr/bin/yt-dlp"), \
+         patch("eyeroll.acquire.subprocess.run", side_effect=[meta_result, dl_fail]), \
+         patch("eyeroll.acquire.tempfile.mkdtemp", return_value="/tmp/eyeroll_test"), \
+         patch("eyeroll.acquire._try_update_ytdlp", return_value=False):
+        with pytest.raises(RuntimeError, match="yt-dlp failed to download"):
+            _download_url("https://example.com/bad-url")
+
+
+def test_download_url_retry_also_fails_raises_error():
+    """Download fails, yt-dlp updates, retry also fails, original error raised."""
+    meta_result = MagicMock(returncode=0, stdout="{}", stderr="")
+    dl_fail = MagicMock(returncode=1, stdout="", stderr="ERROR: first failure")
+    dl_retry_fail = MagicMock(returncode=1, stdout="", stderr="ERROR: second failure")
+
+    with patch("eyeroll.acquire.shutil.which", return_value="/usr/bin/yt-dlp"), \
+         patch("eyeroll.acquire.subprocess.run", side_effect=[meta_result, dl_fail, dl_retry_fail]), \
+         patch("eyeroll.acquire.tempfile.mkdtemp", return_value="/tmp/eyeroll_test"), \
+         patch("eyeroll.acquire._try_update_ytdlp", return_value=True):
+        with pytest.raises(RuntimeError, match="yt-dlp failed to download"):
+            _download_url("https://example.com/bad-url")

@@ -215,3 +215,103 @@ def test_watch_with_codebase_context_file(runner, tmp_path):
 
     assert result.exit_code == 0
     assert mock_watch.call_args[1]["codebase_context"] == "## Project: myapp\n**Stack:** Python"
+
+
+# ---------------------------------------------------------------------------
+# eyeroll history
+# ---------------------------------------------------------------------------
+
+def test_history_empty(runner):
+    """History with no cache shows empty message."""
+    with patch("eyeroll.history.list_history", return_value=[]):
+        result = runner.invoke(cli, ["history"])
+
+    assert result.exit_code == 0
+    assert "No cached analyses found" in result.output
+
+
+def test_history_lists_entries(runner):
+    """History lists entries in human-readable format."""
+    entries = [
+        {"key": "bbb222", "source": "https://loom.com/share/xyz",
+         "timestamp": "2024-01-15T14:30:00+00:00"},
+        {"key": "aaa111", "source": "video.mp4",
+         "timestamp": "2024-01-15T13:00:00+00:00", "media_type": "video"},
+    ]
+    with patch("eyeroll.history.list_history", return_value=entries):
+        result = runner.invoke(cli, ["history"])
+
+    assert result.exit_code == 0
+    assert "bbb222" in result.output
+    assert "aaa111" in result.output
+    assert "loom.com" in result.output
+    assert "(video)" in result.output
+
+
+def test_history_with_limit(runner):
+    """--limit is passed through to list_history."""
+    with patch("eyeroll.history.list_history", return_value=[]) as mock_list:
+        result = runner.invoke(cli, ["history", "--limit", "5"])
+
+    assert result.exit_code == 0
+    mock_list.assert_called_once_with(limit=5)
+
+
+def test_history_json_output(runner):
+    """--json outputs valid JSON."""
+    entries = [
+        {"key": "aaa111", "source": "video.mp4",
+         "timestamp": "2024-01-15T13:00:00+00:00"},
+    ]
+    with patch("eyeroll.history.list_history", return_value=entries):
+        result = runner.invoke(cli, ["history", "--json"])
+
+    assert result.exit_code == 0
+    import json
+    parsed = json.loads(result.output)
+    assert len(parsed) == 1
+    assert parsed[0]["key"] == "aaa111"
+
+
+def test_history_clear_with_confirm(runner):
+    """History clear asks for confirmation and clears."""
+    entries = [{"key": "aaa111", "source": "v.mp4", "timestamp": "2024-01-15T13:00:00+00:00"}]
+    with patch("eyeroll.history.list_history", return_value=entries), \
+         patch("eyeroll.history.clear_history") as mock_clear:
+        result = runner.invoke(cli, ["history", "clear"], input="y\n")
+
+    assert result.exit_code == 0
+    assert "Cleared 1" in result.output
+    mock_clear.assert_called_once()
+
+
+def test_history_clear_aborted(runner):
+    """History clear aborted when user says no."""
+    entries = [{"key": "aaa111", "source": "v.mp4", "timestamp": "2024-01-15T13:00:00+00:00"}]
+    with patch("eyeroll.history.list_history", return_value=entries), \
+         patch("eyeroll.history.clear_history") as mock_clear:
+        result = runner.invoke(cli, ["history", "clear"], input="n\n")
+
+    assert result.exit_code == 0
+    assert "Aborted" in result.output
+    mock_clear.assert_not_called()
+
+
+def test_history_clear_yes_flag(runner):
+    """--yes skips confirmation."""
+    entries = [{"key": "aaa111", "source": "v.mp4", "timestamp": "2024-01-15T13:00:00+00:00"}]
+    with patch("eyeroll.history.list_history", return_value=entries), \
+         patch("eyeroll.history.clear_history") as mock_clear:
+        result = runner.invoke(cli, ["history", "clear", "--yes"])
+
+    assert result.exit_code == 0
+    mock_clear.assert_called_once()
+
+
+def test_history_clear_already_empty(runner):
+    """Clear on empty cache shows message."""
+    with patch("eyeroll.history.list_history", return_value=[]):
+        result = runner.invoke(cli, ["history", "clear"])
+
+    assert result.exit_code == 0
+    assert "already empty" in result.output

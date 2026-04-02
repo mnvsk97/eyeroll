@@ -38,11 +38,15 @@ eyeroll = "eyeroll.cli:cli"
 gemini = [
     "google-genai>=1.0",
 ]
+openai = [
+    "openai>=1.0",
+]
 download = [
     "yt-dlp>=2024.0",
 ]
 all = [
     "google-genai>=1.0",
+    "openai>=1.0",
     "yt-dlp>=2024.0",
 ]
 dev = [

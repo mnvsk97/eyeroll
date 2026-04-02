@@ -1,7 +1,8 @@
 """Backend abstraction for vision/language model calls.
 
 Supports:
-  - gemini: Google Gemini Flash API (default, requires GEMINI_API_KEY)
+  - gemini: Google Gemini Flash API (requires GEMINI_API_KEY)
+  - openai: OpenAI GPT-4o API (requires OPENAI_API_KEY)
   - ollama: Local Ollama with vision models like qwen3-vl (no API key needed)
 """
 
@@ -190,6 +191,83 @@ class GeminiBackend(Backend):
 
 
 # ---------------------------------------------------------------------------
+# OpenAI Backend
+# ---------------------------------------------------------------------------
+
+class OpenAIBackend(Backend):
+    """OpenAI GPT-4o API backend."""
+
+    def __init__(self, model: str = "gpt-4o"):
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError(
+                "OpenAI backend requires openai. Install with: pip install eyeroll[openai]"
+            )
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise AnalysisError(
+                "No OpenAI API key found.\n\n"
+                "Get a key at: https://platform.openai.com/api-keys\n"
+                "Then: export OPENAI_API_KEY=your-key\n\n"
+                "Or use a different backend:\n"
+                "  eyeroll watch <source> --backend gemini\n"
+                "  eyeroll watch <source> --backend ollama"
+            )
+        self._client = OpenAI(api_key=api_key)
+        self._model = model
+
+    def analyze_image(self, image_path: str, prompt: str, verbose: bool = False) -> str:
+        with open(image_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        ext = os.path.splitext(image_path)[1].lower()
+        mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+                    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
+        mime_type = mime_map.get(ext, "image/jpeg")
+
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64}"}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        )
+        return response.choices[0].message.content
+
+    def analyze_video(self, video_path: str, prompt: str, verbose: bool = False) -> str:
+        raise AnalysisError(
+            "OpenAI does not support direct video upload. "
+            "Use frame-by-frame mode instead."
+        )
+
+    def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+        with open(audio_path, "rb") as f:
+            transcript = self._client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+            )
+        return transcript.text
+
+    def generate(self, prompt: str, verbose: bool = False) -> str:
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content
+
+    @property
+    def supports_video(self) -> bool:
+        return False
+
+    @property
+    def supports_audio(self) -> bool:
+        return True
+
+
+# ---------------------------------------------------------------------------
 # Ollama Backend
 # ---------------------------------------------------------------------------
 
@@ -322,7 +400,7 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
     """Get or create the active backend.
 
     Args:
-        name: 'gemini' or 'ollama'. Defaults to EYEROLL_BACKEND env var, then 'gemini'.
+        name: 'gemini', 'openai', or 'ollama'. Defaults to EYEROLL_BACKEND env var, then 'gemini'.
         **kwargs: passed to backend constructor (e.g., model, host).
     """
     global _current_backend
@@ -334,10 +412,12 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
 
     if name == "gemini":
         _current_backend = GeminiBackend(**kwargs)
+    elif name == "openai":
+        _current_backend = OpenAIBackend(**kwargs)
     elif name == "ollama":
         _current_backend = OllamaBackend(**kwargs)
     else:
-        raise ValueError(f"Unknown backend: {name}. Use 'gemini' or 'ollama'.")
+        raise ValueError(f"Unknown backend: {name}. Use 'gemini', 'openai', or 'ollama'.")
 
     return _current_backend
 

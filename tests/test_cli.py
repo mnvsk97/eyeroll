@@ -151,7 +151,7 @@ def test_watch_verbose_flag(runner):
 # eyeroll init
 # ---------------------------------------------------------------------------
 
-def test_init_command(runner, tmp_path):
+def test_init_gemini(runner, tmp_path):
     env_path = str(tmp_path / ".eyeroll" / ".env")
 
     mock_client = MagicMock()
@@ -164,13 +164,50 @@ def test_init_command(runner, tmp_path):
 
     with patch("eyeroll.cli._ENV_PATH", env_path), \
          patch.dict("sys.modules", {"google": MagicMock(), "google.genai": mock_genai}):
-        result = runner.invoke(cli, ["init"], input="test-api-key-123\n")
+        # Choose 1 (gemini), then enter API key
+        result = runner.invoke(cli, ["init"], input="1\ntest-api-key-123\n")
 
     assert result.exit_code == 0
     assert "Setup complete" in result.output
     assert os.path.isfile(env_path)
     with open(env_path) as f:
-        assert "GEMINI_API_KEY=test-api-key-123" in f.read()
+        content = f.read()
+        assert "GEMINI_API_KEY=test-api-key-123" in content
+        assert "EYEROLL_BACKEND=gemini" in content
+
+
+def test_init_openai(runner, tmp_path):
+    env_path = str(tmp_path / ".eyeroll" / ".env")
+
+    mock_openai_mod = MagicMock()
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="ok"))]
+    mock_client.chat.completions.create.return_value = mock_response
+    mock_openai_mod.OpenAI.return_value = mock_client
+
+    with patch("eyeroll.cli._ENV_PATH", env_path), \
+         patch.dict("sys.modules", {"openai": mock_openai_mod}):
+        result = runner.invoke(cli, ["init"], input="2\nsk-test-key-456\n")
+
+    assert result.exit_code == 0
+    assert "Setup complete" in result.output
+    with open(env_path) as f:
+        content = f.read()
+        assert "OPENAI_API_KEY=sk-test-key-456" in content
+        assert "EYEROLL_BACKEND=openai" in content
+
+
+def test_init_ollama(runner, tmp_path):
+    env_path = str(tmp_path / ".eyeroll" / ".env")
+
+    with patch("eyeroll.cli._ENV_PATH", env_path):
+        result = runner.invoke(cli, ["init"], input="3\n")
+
+    assert result.exit_code == 0
+    assert "Setup complete" in result.output
+    with open(env_path) as f:
+        assert "EYEROLL_BACKEND=ollama" in content if (content := f.read()) else False
 
 
 def test_init_validation_failure(runner, tmp_path):
@@ -183,7 +220,8 @@ def test_init_validation_failure(runner, tmp_path):
 
     with patch("eyeroll.cli._ENV_PATH", env_path), \
          patch.dict("sys.modules", {"google": mock_google, "google.genai": mock_genai}):
-        result = runner.invoke(cli, ["init"], input="bad-key\n")
+        # Choose 1 (gemini), enter bad key
+        result = runner.invoke(cli, ["init"], input="1\nbad-key\n")
 
     assert result.exit_code == 1
 

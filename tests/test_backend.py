@@ -10,6 +10,7 @@ from eyeroll.backend import (
     AnalysisError,
     GeminiBackend,
     OllamaBackend,
+    OpenAIBackend,
     get_backend,
     reset_backend,
 )
@@ -220,3 +221,86 @@ def test_ollama_default_model():
 def test_ollama_custom_model():
     backend = _make_ollama(model="llava:7b")
     assert backend._model == "llava:7b"
+
+
+# ---------------------------------------------------------------------------
+# OpenAIBackend
+# ---------------------------------------------------------------------------
+
+def _make_openai(**kwargs):
+    """Create an OpenAIBackend with mocked OpenAI client."""
+    mock_openai_mod = MagicMock()
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), \
+         patch.dict("sys.modules", {"openai": mock_openai_mod}):
+        return OpenAIBackend(**kwargs)
+
+
+def test_get_backend_openai():
+    mock_openai_mod = MagicMock()
+    with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), \
+         patch.dict("sys.modules", {"openai": mock_openai_mod}):
+        backend = get_backend("openai")
+        assert isinstance(backend, OpenAIBackend)
+
+
+def test_openai_no_api_key():
+    mock_openai_mod = MagicMock()
+    env = {k: v for k, v in os.environ.items() if k != "OPENAI_API_KEY"}
+    with patch.dict(os.environ, env, clear=True), \
+         patch.dict("sys.modules", {"openai": mock_openai_mod}):
+        with pytest.raises(AnalysisError, match="No OpenAI API key found"):
+            OpenAIBackend()
+
+
+def test_openai_supports_video():
+    backend = _make_openai()
+    assert backend.supports_video is False
+
+
+def test_openai_supports_audio():
+    backend = _make_openai()
+    assert backend.supports_audio is True
+
+
+def test_openai_analyze_video_raises():
+    backend = _make_openai()
+    with pytest.raises(AnalysisError, match="does not support direct video"):
+        backend.analyze_video("/path/to/video.mp4", "describe")
+
+
+def test_openai_analyze_image(tmp_image_path):
+    backend = _make_openai()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Image analysis"))]
+    backend._client.chat.completions.create.return_value = mock_response
+
+    result = backend.analyze_image(tmp_image_path, "Describe this")
+    assert result == "Image analysis"
+
+
+def test_openai_generate():
+    backend = _make_openai()
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content="Generated text"))]
+    backend._client.chat.completions.create.return_value = mock_response
+
+    result = backend.generate("test prompt")
+    assert result == "Generated text"
+
+
+def test_openai_analyze_audio(tmp_video_path):
+    backend = _make_openai()
+    backend._client.audio.transcriptions.create.return_value = MagicMock(text="Audio transcript")
+
+    result = backend.analyze_audio(tmp_video_path, "Transcribe")
+    assert result == "Audio transcript"
+
+
+def test_openai_default_model():
+    backend = _make_openai()
+    assert backend._model == "gpt-4o"
+
+
+def test_openai_custom_model():
+    backend = _make_openai(model="gpt-4o-mini")
+    assert backend._model == "gpt-4o-mini"

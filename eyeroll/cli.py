@@ -19,50 +19,121 @@ def cli():
 
 @cli.command()
 def init():
-    """Set up your Gemini API key."""
+    """Set up eyeroll — choose a backend and configure API key."""
     env_dir = os.path.dirname(_ENV_PATH)
     os.makedirs(env_dir, exist_ok=True)
 
-    if os.path.exists(_ENV_PATH):
-        with open(_ENV_PATH) as f:
-            if "GEMINI_API_KEY=" in f.read():
-                if not click.confirm("API key already configured. Overwrite?", default=False):
-                    return
+    # Ask which backend
+    click.echo("Which backend do you want to use?\n")
+    click.echo("  1. gemini  — Google Gemini Flash API (fast, cheap, best quality)")
+    click.echo("  2. openai  — OpenAI GPT-4o (great vision, Whisper audio)")
+    click.echo("  3. ollama  — Local models via Ollama (private, no API key)\n")
 
-    api_key = click.prompt(
-        "Enter your Gemini API key\n"
-        "  Get one at https://aistudio.google.com/apikey\n"
-        "  (input is hidden)",
-        hide_input=True,
-    )
+    choice = click.prompt("Choose", type=click.Choice(["1", "2", "3"]), default="1")
+    backend_map = {"1": "gemini", "2": "openai", "3": "ollama"}
+    backend = backend_map[choice]
 
-    with open(_ENV_PATH, "w") as f:
-        f.write(f"GEMINI_API_KEY={api_key}\n")
+    if backend == "ollama":
+        click.echo("\nOllama needs no API key. Make sure Ollama is running:")
+        click.echo("  ollama serve")
+        click.echo(f"\nSaving backend preference...")
+        _save_env("EYEROLL_BACKEND", backend)
+        click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
+        return
 
-    os.environ["GEMINI_API_KEY"] = api_key
+    # API key setup for gemini or openai
+    key_name = "GEMINI_API_KEY" if backend == "gemini" else "OPENAI_API_KEY"
+    existing_key = os.environ.get(key_name)
+
+    if existing_key:
+        if not click.confirm(f"{key_name} already set. Overwrite?", default=False):
+            _save_env("EYEROLL_BACKEND", backend)
+            click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
+            return
+
+    if backend == "gemini":
+        prompt_text = (
+            f"Enter your Gemini API key\n"
+            f"  Get one at https://aistudio.google.com/apikey\n"
+            f"  (input is hidden)"
+        )
+    else:
+        prompt_text = (
+            f"Enter your OpenAI API key\n"
+            f"  Get one at https://platform.openai.com/api-keys\n"
+            f"  (input is hidden)"
+        )
+
+    api_key = click.prompt(prompt_text, hide_input=True)
+
+    _save_env(key_name, api_key)
+    _save_env("EYEROLL_BACKEND", backend)
+    os.environ[key_name] = api_key
+
     click.echo("Validating API key...")
 
     try:
-        try:
-            from google import genai
-        except ImportError:
-            click.secho(
-                "Gemini backend requires google-genai. Install with: pip install eyeroll[gemini]",
-                fg="red", err=True,
-            )
-            raise SystemExit(1)
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents="Say 'ok' if you can read this.",
-        )
-        if response.text:
-            click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
+        if backend == "gemini":
+            _validate_gemini(api_key)
         else:
-            click.secho("API key accepted but got empty response.", fg="yellow")
+            _validate_openai(api_key)
+        click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
     except Exception as e:
         click.secho(f"Validation failed: {e}", fg="red", err=True)
         raise SystemExit(1)
+
+
+def _save_env(key: str, value: str) -> None:
+    """Append or update a key in ~/.eyeroll/.env."""
+    env_dir = os.path.dirname(_ENV_PATH)
+    os.makedirs(env_dir, exist_ok=True)
+
+    lines = []
+    if os.path.exists(_ENV_PATH):
+        with open(_ENV_PATH) as f:
+            lines = [l for l in f.readlines() if not l.startswith(f"{key}=")]
+    lines.append(f"{key}={value}\n")
+    with open(_ENV_PATH, "w") as f:
+        f.writelines(lines)
+
+
+def _validate_gemini(api_key: str) -> None:
+    """Validate a Gemini API key."""
+    try:
+        from google import genai
+    except ImportError:
+        click.secho(
+            "Gemini SDK not installed. Run: pip install eyeroll[gemini]",
+            fg="red", err=True,
+        )
+        raise SystemExit(1)
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents="Say 'ok' if you can read this.",
+    )
+    if not response.text:
+        raise RuntimeError("API key accepted but got empty response.")
+
+
+def _validate_openai(api_key: str) -> None:
+    """Validate an OpenAI API key."""
+    try:
+        from openai import OpenAI
+    except ImportError:
+        click.secho(
+            "OpenAI SDK not installed. Run: pip install eyeroll[openai]",
+            fg="red", err=True,
+        )
+        raise SystemExit(1)
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": "Say 'ok' if you can read this."}],
+        max_tokens=5,
+    )
+    if not response.choices[0].message.content:
+        raise RuntimeError("API key accepted but got empty response.")
 
 
 
@@ -72,7 +143,7 @@ def init():
               help="Additional context (Slack message, issue description, what to do with the video, etc.)")
 @click.option("--max-frames", default=20, show_default=True,
               help="Maximum key frames to analyze from video.")
-@click.option("--backend", "-b", type=click.Choice(["gemini", "ollama"]), default=None,
+@click.option("--backend", "-b", type=click.Choice(["gemini", "openai", "ollama"]), default=None,
               help="Vision backend. Defaults to EYEROLL_BACKEND env var, then gemini.")
 @click.option("--model", "-m", default=None,
               help="Model override (e.g., qwen3-vl:8b for ollama, gemini-2.0-flash for gemini).")
@@ -90,6 +161,7 @@ def watch(source, context, codebase_context, max_frames, backend, model, no_cach
     \b
     Backends:
       gemini   Google Gemini Flash API (default, requires GEMINI_API_KEY)
+      openai   OpenAI GPT-4o (requires OPENAI_API_KEY)
       ollama   Local models via Ollama (e.g., qwen3-vl, no API key needed)
 
     \b
@@ -101,9 +173,13 @@ def watch(source, context, codebase_context, max_frames, backend, model, no_cach
     """
     from .watch import watch as run_watch
 
-    # --model without --backend implies ollama if model looks local
+    # --model without --backend: infer backend from model name
     if model and not backend:
-        if not model.startswith("gemini"):
+        if model.startswith("gemini"):
+            pass  # default backend is gemini
+        elif model.startswith("gpt") or model.startswith("o1") or model.startswith("o3"):
+            backend = "openai"
+        else:
             backend = "ollama"
 
     # Resolve --codebase-context: if it's a file path, read it

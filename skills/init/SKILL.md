@@ -12,9 +12,10 @@ Set up eyeroll for the current project so video analysis is grounded in codebase
 
 ## What This Skill Does
 
-1. Checks that eyeroll is installed and GEMINI_API_KEY is set
-2. Explores the codebase to understand the project
-3. Writes `.eyeroll/context.md` — a concise summary that gets passed to eyeroll during video analysis
+1. Runs `eyeroll init` — asks user to pick a backend (Gemini, OpenAI, or Ollama) and set up API key
+2. Installs the right extras if needed (`pip install eyeroll[gemini]` or `eyeroll[openai]`)
+3. Explores the codebase to understand the project
+4. Writes `.eyeroll/context.md` — a concise summary that gets passed to eyeroll during video analysis
 
 ## Workflow
 

@@ -30,6 +30,7 @@ Thumbs.db
 *.jpg
 *.jpeg
 !docs/*.png
+!tests/fixtures/*
 output/
 tmp/
 .eyeroll/

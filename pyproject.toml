@@ -63,4 +63,7 @@ packages = ["eyeroll"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m 'not integration'"
+markers = [
+    "integration: real API calls with real media (skip in CI, run manually before releases)",
+]

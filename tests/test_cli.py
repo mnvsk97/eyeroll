@@ -50,6 +50,7 @@ def test_watch_local_file(runner, tmp_path):
         model=None,
         verbose=False,
         no_cache=False,
+        parallel=1,
     )
 
 

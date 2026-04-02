@@ -68,6 +68,25 @@ def test_analyze_frames_prompt_formatting():
     assert "7.3s" in prompt_arg
 
 
+def test_analyze_frames_parallel():
+    """Parallel analysis returns results in correct order."""
+    mock_backend = MagicMock()
+    mock_backend.analyze_image.side_effect = ["a0", "a1", "a2", "a3"]
+
+    frames = [
+        {"frame_path": f"/tmp/f{i}.jpg", "timestamp": float(i), "frame_index": i}
+        for i in range(4)
+    ]
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        results = analyze_frames(frames, parallel=3)
+
+    assert len(results) == 4
+    # Results should be sorted by frame_index regardless of completion order
+    assert [r["frame_index"] for r in results] == [0, 1, 2, 3]
+    assert mock_backend.analyze_image.call_count == 4
+
+
 # ---------------------------------------------------------------------------
 # analyze_video_direct
 # ---------------------------------------------------------------------------

@@ -71,18 +71,98 @@ def extract_key_frames(
     video_path: str,
     max_frames: int = 20,
     output_dir: str | None = None,
+    scene_detection: bool = True,
+    scene_threshold: float = 0.15,
 ) -> list[dict]:
-    """Extract key frames from a video at even intervals.
+    """Extract key frames from a video.
+
+    Uses ffmpeg scene detection to pick frames where the screen changes.
+    Falls back to even-spaced intervals if scene detection finds too few frames.
 
     Returns list of dicts with keys: frame_path, timestamp, frame_index.
     """
-    ffmpeg = _get_ffmpeg()
-    duration = get_video_duration(video_path)
-
     if output_dir is None:
         output_dir = tempfile.mkdtemp(prefix="eyeroll_frames_")
 
-    # Calculate interval between frames
+    frames = []
+    if scene_detection:
+        frames = _extract_scene_frames(video_path, max_frames, scene_threshold, output_dir)
+
+    # Fallback to even-spaced if scene detection returned too few frames
+    if len(frames) < 3:
+        # Clean up any scene detection output
+        for f in frames:
+            try:
+                os.remove(f["frame_path"])
+            except OSError:
+                pass
+        frames = _extract_even_frames(video_path, max_frames, output_dir)
+
+    return frames
+
+
+def _extract_scene_frames(
+    video_path: str,
+    max_frames: int,
+    threshold: float,
+    output_dir: str,
+) -> list[dict]:
+    """Extract frames at scene changes using ffmpeg's scene detection filter."""
+    ffmpeg = _get_ffmpeg()
+
+    # Use ffmpeg scene filter to output frames + timestamps
+    result = subprocess.run(
+        [
+            ffmpeg, "-y",
+            "-i", video_path,
+            "-vf", f"select='gt(scene\\,{threshold})',showinfo",
+            "-vsync", "vfr",
+            "-q:v", "2",
+            "-frame_pts", "1",
+            os.path.join(output_dir, "scene_%03d.jpg"),
+        ],
+        capture_output=True, text=True, check=False,
+    )
+
+    if result.returncode != 0:
+        return []
+
+    # Parse timestamps from showinfo output
+    timestamps = _parse_showinfo_timestamps(result.stderr)
+
+    # Collect the output files
+    frames = []
+    for i, fpath in enumerate(sorted(Path(output_dir).glob("scene_*.jpg"))):
+        if i >= max_frames:
+            break
+        if fpath.stat().st_size > 0:
+            ts = timestamps[i] if i < len(timestamps) else 0.0
+            frames.append({
+                "frame_path": str(fpath),
+                "timestamp": ts,
+                "frame_index": i,
+            })
+
+    return frames
+
+
+def _parse_showinfo_timestamps(stderr: str) -> list[float]:
+    """Parse pts_time values from ffmpeg showinfo filter output."""
+    timestamps = []
+    for match in re.finditer(r"pts_time:\s*([\d.]+)", stderr):
+        timestamps.append(float(match.group(1)))
+    return timestamps
+
+
+def _extract_even_frames(
+    video_path: str,
+    max_frames: int,
+    output_dir: str,
+) -> list[dict]:
+    """Extract frames at even intervals (original approach)."""
+    ffmpeg = _get_ffmpeg()
+    duration = get_video_duration(video_path)
+
     num_frames = min(max_frames, max(1, int(duration)))
     interval = duration / num_frames if num_frames > 1 else duration
 

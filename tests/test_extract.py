@@ -172,7 +172,10 @@ def test_extract_key_frames(tmp_path):
     with patch("eyeroll.extract._get_ffmpeg", return_value="/usr/bin/ffmpeg"), \
          patch("eyeroll.extract.get_video_duration", return_value=10.0), \
          patch("eyeroll.extract.subprocess.run", side_effect=fake_subprocess_run):
-        frames = extract_key_frames("/path/to/video.mp4", max_frames=5, output_dir=output_dir)
+        frames = extract_key_frames(
+            "/path/to/video.mp4", max_frames=5, output_dir=output_dir,
+            scene_detection=False,
+        )
         assert len(frames) == 5
         assert frames[0]["frame_index"] == 0
         assert frames[0]["timestamp"] == 0.0
@@ -188,8 +191,77 @@ def test_extract_key_frames_no_output(tmp_path):
     with patch("eyeroll.extract._get_ffmpeg", return_value="/usr/bin/ffmpeg"), \
          patch("eyeroll.extract.get_video_duration", return_value=5.0), \
          patch("eyeroll.extract.subprocess.run", return_value=MagicMock(returncode=1)):
-        frames = extract_key_frames("/path/to/video.mp4", max_frames=3, output_dir=output_dir)
+        frames = extract_key_frames(
+            "/path/to/video.mp4", max_frames=3, output_dir=output_dir,
+            scene_detection=False,
+        )
         assert frames == []
+
+
+def test_extract_scene_detection(tmp_path):
+    """Scene detection extracts frames at change points."""
+    output_dir = str(tmp_path / "frames")
+    os.makedirs(output_dir)
+
+    call_count = 0
+
+    def fake_scene_run(cmd, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        # First call is the scene detection filter
+        if call_count == 1:
+            # Create scene output files
+            for i in range(3):
+                fpath = os.path.join(output_dir, f"scene_{i + 1:03d}.jpg")
+                with open(fpath, "wb") as f:
+                    f.write(b"\xff\xd8\xff" + b"\x00" * 100)
+            return MagicMock(
+                returncode=0,
+                stderr="[showinfo] pts_time:0.5\n[showinfo] pts_time:3.2\n[showinfo] pts_time:7.8\n",
+            )
+        return MagicMock(returncode=0)
+
+    with patch("eyeroll.extract._get_ffmpeg", return_value="/usr/bin/ffmpeg"), \
+         patch("eyeroll.extract.subprocess.run", side_effect=fake_scene_run):
+        frames = extract_key_frames(
+            "/path/to/video.mp4", max_frames=10, output_dir=output_dir,
+        )
+
+    assert len(frames) == 3
+    assert frames[0]["timestamp"] == 0.5
+    assert frames[1]["timestamp"] == 3.2
+    assert frames[2]["timestamp"] == 7.8
+
+
+def test_extract_scene_detection_fallback(tmp_path):
+    """Falls back to even-spaced when scene detection finds too few frames."""
+    output_dir = str(tmp_path / "frames")
+    os.makedirs(output_dir)
+
+    call_count = 0
+
+    def fake_run(cmd, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        # Scene detection returns nothing (no scenes detected)
+        if call_count == 1:
+            return MagicMock(returncode=0, stderr="")
+        # Even-spaced fallback creates frames
+        frame_path = cmd[-1]
+        if frame_path.endswith(".jpg"):
+            with open(frame_path, "wb") as f:
+                f.write(b"\xff\xd8\xff" + b"\x00" * 100)
+        return MagicMock(returncode=0)
+
+    with patch("eyeroll.extract._get_ffmpeg", return_value="/usr/bin/ffmpeg"), \
+         patch("eyeroll.extract.get_video_duration", return_value=10.0), \
+         patch("eyeroll.extract.subprocess.run", side_effect=fake_run):
+        frames = extract_key_frames(
+            "/path/to/video.mp4", max_frames=5, output_dir=output_dir,
+        )
+
+    # Should have fallen back to even-spaced
+    assert len(frames) >= 3
 
 
 # ---------------------------------------------------------------------------

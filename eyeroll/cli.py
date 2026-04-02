@@ -149,11 +149,13 @@ def _validate_openai(api_key: str) -> None:
               help="Model override (e.g., qwen3-vl:8b for ollama, gemini-2.0-flash for gemini).")
 @click.option("--codebase-context", "-cc", default=None,
               help="Codebase context (inline text or path to a file like .eyeroll/context.md).")
+@click.option("--parallel", "-p", default=1, show_default=True, type=int,
+              help="Concurrent workers for frame analysis (1=sequential, 3-5 recommended).")
 @click.option("--no-cache", is_flag=True, help="Skip cache and force fresh analysis.")
 @click.option("--output", "-o", default=None,
               help="Write output to file instead of stdout.")
 @click.option("--verbose", "-v", is_flag=True, help="Show progress details.")
-def watch(source, context, codebase_context, max_frames, backend, model, no_cache, output, verbose):
+def watch(source, context, codebase_context, max_frames, backend, model, parallel, no_cache, output, verbose):
     """Analyze a video/screenshot and produce structured notes.
 
     SOURCE can be a URL (YouTube, Loom, etc.) or a local file path.
@@ -197,6 +199,7 @@ def watch(source, context, codebase_context, max_frames, backend, model, no_cach
             model=model,
             verbose=verbose,
             no_cache=no_cache,
+            parallel=parallel,
         )
 
         if output:

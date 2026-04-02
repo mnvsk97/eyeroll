@@ -141,16 +141,23 @@ def analyze_frames(
     frames: list[dict],
     backend_name: str | None = None,
     verbose: bool = False,
+    parallel: int = 1,
     **backend_kwargs,
 ) -> list[dict]:
     """Analyze individual frames using the configured backend.
 
+    Args:
+        frames: List of frame dicts with frame_path, timestamp, frame_index.
+        parallel: Number of concurrent workers. 1 = sequential (default).
+
     Returns list of dicts with frame_index, timestamp, analysis (text).
     """
     backend = get_backend(backend_name, **backend_kwargs)
-    results = []
 
-    for frame in frames:
+    if not frames:
+        return []
+
+    def _analyze_one(frame: dict) -> dict:
         if verbose:
             from .extract import fmt_timestamp
             print(
@@ -166,13 +173,25 @@ def analyze_frames(
 
         text = backend.analyze_image(frame["frame_path"], prompt, verbose=verbose)
 
-        results.append({
+        return {
             "frame_index": frame["frame_index"],
             "timestamp": frame["timestamp"],
             "analysis": text,
-        })
+        }
 
-    return results
+    if parallel > 1 and len(frames) > 1:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        workers = min(parallel, len(frames))
+        results = []
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_analyze_one, f): f for f in frames}
+            for future in as_completed(futures):
+                results.append(future.result())
+        # Sort by frame_index to maintain order
+        results.sort(key=lambda r: r["frame_index"])
+        return results
+
+    return [_analyze_one(frame) for frame in frames]
 
 
 def analyze_video_direct(

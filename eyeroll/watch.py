@@ -38,6 +38,7 @@ def watch(
     model: str | None = None,
     verbose: bool = False,
     no_cache: bool = False,
+    parallel: int = 1,
 ) -> str:
     """Full pipeline: acquire media -> extract -> analyze -> report.
 
@@ -46,10 +47,11 @@ def watch(
         context: Optional text context (Slack message, issue body, etc.)
         codebase_context: Optional codebase context (project structure, stack, key files).
         max_frames: Maximum number of key frames to extract and analyze.
-        backend_name: 'gemini' or 'ollama'. Defaults to EYEROLL_BACKEND env var, then 'gemini'.
+        backend_name: 'gemini', 'openai', or 'ollama'. Defaults to EYEROLL_BACKEND env var, then 'gemini'.
         model: Model override (e.g., 'qwen3-vl:8b' for ollama, 'gemini-2.0-flash' for gemini).
         verbose: Print progress to stderr.
         no_cache: Skip cache lookup and force fresh analysis.
+        parallel: Number of concurrent workers for frame analysis (default: 1 = sequential).
 
     Returns:
         Markdown-formatted report.
@@ -104,10 +106,10 @@ def watch(
 
     try:
         if media_type == "image":
-            intermediates = _analyze_image(file_path, title, backend_label, verbose)
+            intermediates = _analyze_image(file_path, title, backend_label, verbose, parallel)
         else:
             intermediates = _analyze_video(
-                file_path, title, max_frames, backend, backend_label, verbose,
+                file_path, title, max_frames, backend, backend_label, verbose, parallel,
             )
 
         # Cache intermediates (before synthesis)
@@ -137,6 +139,7 @@ def _analyze_image(
     title: str,
     backend_label: str,
     verbose: bool,
+    parallel: int = 1,
 ) -> dict:
     """Analyze a single screenshot/image. Returns intermediates dict."""
     frames = [{
@@ -145,7 +148,7 @@ def _analyze_image(
         "frame_index": 0,
     }]
 
-    frame_analyses = analyze_frames(frames, verbose=verbose)
+    frame_analyses = analyze_frames(frames, verbose=verbose, parallel=parallel)
 
     return {
         "title": title,
@@ -163,6 +166,7 @@ def _analyze_video(
     backend,
     backend_label: str,
     verbose: bool,
+    parallel: int = 1,
 ) -> dict:
     """Analyze a video file. Returns intermediates dict."""
     duration = get_video_duration(file_path)
@@ -194,7 +198,7 @@ def _analyze_video(
         frames = extract_key_frames(file_path, max_frames=max_frames)
         if verbose:
             print(f"  Extracted {len(frames)} key frames", file=sys.stderr)
-        frame_analyses = analyze_frames(frames, verbose=verbose)
+        frame_analyses = analyze_frames(frames, verbose=verbose, parallel=parallel)
 
         # Clean up frame files
         if frames:

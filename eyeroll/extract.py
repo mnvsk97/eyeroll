@@ -67,129 +67,109 @@ def has_audio_track(video_path: str) -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# Frame extraction
+# ---------------------------------------------------------------------------
+#
+# Strategy:
+#   1. Extract 1 frame every 2 seconds (covers the full video)
+#   2. Remove near-duplicate frames by comparing file sizes
+#      (frames that look similar compress to similar JPEG sizes)
+#   3. Boost contrast so local models can read text better
+#   4. Cap at max_frames
+#
+# This gives us 8-15 meaningful frames for a typical 30s-2min video,
+# without needing opencv or any extra dependencies.
+# ---------------------------------------------------------------------------
+
+# Minimum JPEG size difference (bytes) to consider frames "different"
+MIN_SIZE_DELTA = 5000
+
+
 def extract_key_frames(
     video_path: str,
     max_frames: int = 20,
     output_dir: str | None = None,
-    scene_detection: bool = True,
-    scene_threshold: float = 0.15,
+    enhance: bool = True,
 ) -> list[dict]:
     """Extract key frames from a video.
 
-    Uses ffmpeg scene detection to pick frames where the screen changes.
-    Falls back to even-spaced intervals if scene detection finds too few frames.
+    Extracts 1 frame every 2 seconds, removes near-duplicates,
+    and optionally enhances contrast for better text readability.
 
     Returns list of dicts with keys: frame_path, timestamp, frame_index.
     """
-    if output_dir is None:
-        output_dir = tempfile.mkdtemp(prefix="eyeroll_frames_")
-
-    frames = []
-    if scene_detection:
-        frames = _extract_scene_frames(video_path, max_frames, scene_threshold, output_dir)
-
-    # Fallback to even-spaced if scene detection returned too few frames
-    if len(frames) < 3:
-        # Clean up any scene detection output
-        for f in frames:
-            try:
-                os.remove(f["frame_path"])
-            except OSError:
-                pass
-        frames = _extract_even_frames(video_path, max_frames, output_dir)
-
-    return frames
-
-
-def _extract_scene_frames(
-    video_path: str,
-    max_frames: int,
-    threshold: float,
-    output_dir: str,
-) -> list[dict]:
-    """Extract frames at scene changes using ffmpeg's scene detection filter."""
-    ffmpeg = _get_ffmpeg()
-
-    # Use ffmpeg scene filter to output frames + timestamps
-    result = subprocess.run(
-        [
-            ffmpeg, "-y",
-            "-i", video_path,
-            "-vf", f"select='gt(scene\\,{threshold})',showinfo",
-            "-vsync", "vfr",
-            "-q:v", "2",
-            "-frame_pts", "1",
-            os.path.join(output_dir, "scene_%03d.jpg"),
-        ],
-        capture_output=True, text=True, check=False,
-    )
-
-    if result.returncode != 0:
-        return []
-
-    # Parse timestamps from showinfo output
-    timestamps = _parse_showinfo_timestamps(result.stderr)
-
-    # Collect the output files
-    frames = []
-    for i, fpath in enumerate(sorted(Path(output_dir).glob("scene_*.jpg"))):
-        if i >= max_frames:
-            break
-        if fpath.stat().st_size > 0:
-            ts = timestamps[i] if i < len(timestamps) else 0.0
-            frames.append({
-                "frame_path": str(fpath),
-                "timestamp": ts,
-                "frame_index": i,
-            })
-
-    return frames
-
-
-def _parse_showinfo_timestamps(stderr: str) -> list[float]:
-    """Parse pts_time values from ffmpeg showinfo filter output."""
-    timestamps = []
-    for match in re.finditer(r"pts_time:\s*([\d.]+)", stderr):
-        timestamps.append(float(match.group(1)))
-    return timestamps
-
-
-def _extract_even_frames(
-    video_path: str,
-    max_frames: int,
-    output_dir: str,
-) -> list[dict]:
-    """Extract frames at even intervals (original approach)."""
     ffmpeg = _get_ffmpeg()
     duration = get_video_duration(video_path)
 
-    num_frames = min(max_frames, max(1, int(duration)))
-    interval = duration / num_frames if num_frames > 1 else duration
+    if output_dir is None:
+        output_dir = tempfile.mkdtemp(prefix="eyeroll_frames_")
 
-    frames = []
-    for i in range(num_frames):
+    # Step 1: Extract 1 frame every 2 seconds
+    interval = 2.0
+    num_candidates = max(1, int(duration / interval))
+    candidates = []
+
+    # Build ffmpeg filter: boost contrast if enhance=True
+    vf_filter = "eq=contrast=1.3:brightness=0.05" if enhance else None
+
+    for i in range(num_candidates):
         timestamp = i * interval
-        frame_path = os.path.join(output_dir, f"frame_{i:03d}.jpg")
+        frame_path = os.path.join(output_dir, f"raw_{i:03d}.jpg")
 
-        subprocess.run(
-            [
-                ffmpeg, "-y",
-                "-ss", str(timestamp),
-                "-i", video_path,
-                "-vframes", "1",
-                "-q:v", "2",
-                frame_path,
-            ],
-            capture_output=True,
-            check=False,
-        )
+        cmd = [ffmpeg, "-y", "-ss", str(timestamp), "-i", video_path,
+               "-vframes", "1", "-q:v", "2"]
+        if vf_filter:
+            cmd += ["-vf", vf_filter]
+        cmd.append(frame_path)
+
+        subprocess.run(cmd, capture_output=True, check=False)
 
         if os.path.isfile(frame_path) and os.path.getsize(frame_path) > 0:
-            frames.append({
+            candidates.append({
                 "frame_path": frame_path,
                 "timestamp": timestamp,
-                "frame_index": i,
+                "size": os.path.getsize(frame_path),
             })
+
+    if not candidates:
+        return []
+
+    # Step 2: Remove near-duplicate frames
+    # Keep a frame if its file size differs enough from the previous kept frame.
+    # JPEG size is a rough proxy for visual content — similar screens compress similarly.
+    kept = [candidates[0]]  # always keep first frame
+    for c in candidates[1:]:
+        size_delta = abs(c["size"] - kept[-1]["size"])
+        if size_delta > MIN_SIZE_DELTA:
+            kept.append(c)
+
+    # Always keep the last frame (often shows the final state / error)
+    if len(candidates) > 1 and kept[-1] is not candidates[-1]:
+        kept.append(candidates[-1])
+
+    # Step 3: Cap at max_frames (keep evenly distributed if too many)
+    if len(kept) > max_frames:
+        step = len(kept) / max_frames
+        kept = [kept[int(i * step)] for i in range(max_frames)]
+
+    # Step 4: Rename and reindex
+    frames = []
+    for i, k in enumerate(kept):
+        final_path = os.path.join(output_dir, f"frame_{i:03d}.jpg")
+        os.rename(k["frame_path"], final_path)
+        frames.append({
+            "frame_path": final_path,
+            "timestamp": k["timestamp"],
+            "frame_index": i,
+        })
+
+    # Clean up unused candidate frames
+    for c in candidates:
+        try:
+            os.remove(c["frame_path"])
+        except OSError:
+            pass
 
     return frames
 

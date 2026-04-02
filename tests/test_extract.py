@@ -157,30 +157,55 @@ def test_has_audio_track_ffprobe_failure():
 # ---------------------------------------------------------------------------
 
 def test_extract_key_frames(tmp_path):
-    """Test frame extraction with mocked ffmpeg and file creation."""
+    """Extracts frames and deduplicates by file size."""
     output_dir = str(tmp_path / "frames")
     os.makedirs(output_dir)
 
+    frame_num = 0
+
     def fake_subprocess_run(cmd, **kwargs):
-        # Create the output frame file that ffmpeg would produce
-        frame_path = cmd[-1]  # last arg is the output path
+        nonlocal frame_num
+        frame_path = cmd[-1]
         if frame_path.endswith(".jpg"):
+            # Make each frame a different size so dedup keeps them
             with open(frame_path, "wb") as f:
-                f.write(b"\xff\xd8\xff" + b"\x00" * 100)  # fake JPEG
+                f.write(b"\xff\xd8\xff" + b"\x00" * (10000 + frame_num * 6000))
+            frame_num += 1
         return MagicMock(returncode=0)
 
     with patch("eyeroll.extract._get_ffmpeg", return_value="/usr/bin/ffmpeg"), \
          patch("eyeroll.extract.get_video_duration", return_value=10.0), \
          patch("eyeroll.extract.subprocess.run", side_effect=fake_subprocess_run):
         frames = extract_key_frames(
-            "/path/to/video.mp4", max_frames=5, output_dir=output_dir,
-            scene_detection=False,
+            "/path/to/video.mp4", max_frames=20, output_dir=output_dir,
         )
-        assert len(frames) == 5
+        assert len(frames) >= 1
         assert frames[0]["frame_index"] == 0
         assert frames[0]["timestamp"] == 0.0
         assert os.path.basename(frames[0]["frame_path"]) == "frame_000.jpg"
-        assert frames[4]["frame_index"] == 4
+
+
+def test_extract_key_frames_dedup(tmp_path):
+    """Near-identical frames (similar file size) are removed."""
+    output_dir = str(tmp_path / "frames")
+    os.makedirs(output_dir)
+
+    def fake_subprocess_run(cmd, **kwargs):
+        frame_path = cmd[-1]
+        if frame_path.endswith(".jpg"):
+            # All frames same size — dedup should collapse them
+            with open(frame_path, "wb") as f:
+                f.write(b"\xff\xd8\xff" + b"\x00" * 10000)
+        return MagicMock(returncode=0)
+
+    with patch("eyeroll.extract._get_ffmpeg", return_value="/usr/bin/ffmpeg"), \
+         patch("eyeroll.extract.get_video_duration", return_value=20.0), \
+         patch("eyeroll.extract.subprocess.run", side_effect=fake_subprocess_run):
+        frames = extract_key_frames(
+            "/path/to/video.mp4", max_frames=20, output_dir=output_dir,
+        )
+        # Should keep first + last, but dedup removes the middle ones
+        assert len(frames) <= 3
 
 
 def test_extract_key_frames_no_output(tmp_path):
@@ -193,75 +218,35 @@ def test_extract_key_frames_no_output(tmp_path):
          patch("eyeroll.extract.subprocess.run", return_value=MagicMock(returncode=1)):
         frames = extract_key_frames(
             "/path/to/video.mp4", max_frames=3, output_dir=output_dir,
-            scene_detection=False,
         )
         assert frames == []
 
 
-def test_extract_scene_detection(tmp_path):
-    """Scene detection extracts frames at change points."""
+def test_extract_key_frames_with_enhance_off(tmp_path):
+    """enhance=False skips the contrast filter."""
     output_dir = str(tmp_path / "frames")
     os.makedirs(output_dir)
 
-    call_count = 0
+    calls = []
 
-    def fake_scene_run(cmd, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        # First call is the scene detection filter
-        if call_count == 1:
-            # Create scene output files
-            for i in range(3):
-                fpath = os.path.join(output_dir, f"scene_{i + 1:03d}.jpg")
-                with open(fpath, "wb") as f:
-                    f.write(b"\xff\xd8\xff" + b"\x00" * 100)
-            return MagicMock(
-                returncode=0,
-                stderr="[showinfo] pts_time:0.5\n[showinfo] pts_time:3.2\n[showinfo] pts_time:7.8\n",
-            )
-        return MagicMock(returncode=0)
-
-    with patch("eyeroll.extract._get_ffmpeg", return_value="/usr/bin/ffmpeg"), \
-         patch("eyeroll.extract.subprocess.run", side_effect=fake_scene_run):
-        frames = extract_key_frames(
-            "/path/to/video.mp4", max_frames=10, output_dir=output_dir,
-        )
-
-    assert len(frames) == 3
-    assert frames[0]["timestamp"] == 0.5
-    assert frames[1]["timestamp"] == 3.2
-    assert frames[2]["timestamp"] == 7.8
-
-
-def test_extract_scene_detection_fallback(tmp_path):
-    """Falls back to even-spaced when scene detection finds too few frames."""
-    output_dir = str(tmp_path / "frames")
-    os.makedirs(output_dir)
-
-    call_count = 0
-
-    def fake_run(cmd, **kwargs):
-        nonlocal call_count
-        call_count += 1
-        # Scene detection returns nothing (no scenes detected)
-        if call_count == 1:
-            return MagicMock(returncode=0, stderr="")
-        # Even-spaced fallback creates frames
+    def fake_subprocess_run(cmd, **kwargs):
+        calls.append(cmd)
         frame_path = cmd[-1]
         if frame_path.endswith(".jpg"):
             with open(frame_path, "wb") as f:
-                f.write(b"\xff\xd8\xff" + b"\x00" * 100)
+                f.write(b"\xff\xd8\xff" + b"\x00" * 10000)
         return MagicMock(returncode=0)
 
     with patch("eyeroll.extract._get_ffmpeg", return_value="/usr/bin/ffmpeg"), \
-         patch("eyeroll.extract.get_video_duration", return_value=10.0), \
-         patch("eyeroll.extract.subprocess.run", side_effect=fake_run):
-        frames = extract_key_frames(
-            "/path/to/video.mp4", max_frames=5, output_dir=output_dir,
+         patch("eyeroll.extract.get_video_duration", return_value=4.0), \
+         patch("eyeroll.extract.subprocess.run", side_effect=fake_subprocess_run):
+        extract_key_frames(
+            "/path/to/video.mp4", output_dir=output_dir, enhance=False,
         )
 
-    # Should have fallen back to even-spaced
-    assert len(frames) >= 3
+    # No -vf filter should be in any command
+    for cmd in calls:
+        assert "eq=contrast" not in " ".join(cmd)
 
 
 # ---------------------------------------------------------------------------

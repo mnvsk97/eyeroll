@@ -65,9 +65,6 @@ def watch(
     backend = get_backend(backend_name, **backend_kwargs)
     backend_label = backend_name or os.environ.get("EYEROLL_BACKEND", "gemini")
 
-    # Default to fewer frames for local models (faster, avoids synthesis timeout)
-    if max_frames == 20 and backend_label == "ollama":
-        max_frames = 3
 
     if verbose:
         print(f"Backend: {backend_label}", file=sys.stderr)

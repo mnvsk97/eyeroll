@@ -1,8 +1,11 @@
 """Main orchestrator — the /watch pipeline."""
 
+import hashlib
+import json
 import os
 import shutil
 import sys
+from datetime import datetime, timezone
 
 from .acquire import acquire
 from .analyze import (
@@ -29,20 +32,24 @@ MAX_DIRECT_UPLOAD_SECONDS = 120
 def watch(
     source: str,
     context: str | None = None,
+    codebase_context: str | None = None,
     max_frames: int = 20,
     backend_name: str | None = None,
     model: str | None = None,
     verbose: bool = False,
+    no_cache: bool = False,
 ) -> str:
     """Full pipeline: acquire media -> extract -> analyze -> report.
 
     Args:
         source: URL or local file path to video/image.
         context: Optional text context (Slack message, issue body, etc.)
+        codebase_context: Optional codebase context (project structure, stack, key files).
         max_frames: Maximum number of key frames to extract and analyze.
         backend_name: 'gemini' or 'ollama'. Defaults to EYEROLL_BACKEND env var, then 'gemini'.
         model: Model override (e.g., 'qwen3-vl:8b' for ollama, 'gemini-2.0-flash' for gemini).
         verbose: Print progress to stderr.
+        no_cache: Skip cache lookup and force fresh analysis.
 
     Returns:
         Markdown-formatted report.
@@ -60,6 +67,17 @@ def watch(
         print(f"Backend: {backend_label}", file=sys.stderr)
         if model:
             print(f"Model: {model}", file=sys.stderr)
+        if codebase_context:
+            print("  Codebase context provided", file=sys.stderr)
+
+    # Check cache
+    cache_key = _cache_key(source, backend_label, model)
+    if not no_cache:
+        cached = _cache_load(cache_key)
+        if cached:
+            if verbose:
+                print("  Cache hit — returning stored report", file=sys.stderr)
+            return cached
 
     # Step 1: Acquire
     if verbose:
@@ -77,11 +95,13 @@ def watch(
 
     try:
         if media_type == "image":
-            return _analyze_image(file_path, context, title, backend_label, verbose)
+            report = _analyze_image(file_path, context, codebase_context, title, backend_label, verbose)
         else:
-            return _analyze_video(
-                file_path, context, title, max_frames, backend, backend_label, verbose,
+            report = _analyze_video(
+                file_path, context, codebase_context, title, max_frames, backend, backend_label, verbose,
             )
+        _cache_save(cache_key, source, report)
+        return report
     finally:
         # Clean up downloaded files (not local files)
         if media["source_url"]:
@@ -94,6 +114,7 @@ def watch(
 def _analyze_image(
     file_path: str,
     context: str | None,
+    codebase_context: str | None,
     title: str,
     backend_label: str,
     verbose: bool,
@@ -110,6 +131,7 @@ def _analyze_image(
     report = synthesize_report(
         frame_analyses=frame_analyses,
         context=context,
+        codebase_context=codebase_context,
         verbose=verbose,
     )
 
@@ -119,6 +141,7 @@ def _analyze_image(
 def _analyze_video(
     file_path: str,
     context: str | None,
+    codebase_context: str | None,
     title: str,
     max_frames: int,
     backend,
@@ -180,6 +203,7 @@ def _analyze_video(
         video_analysis=video_analysis,
         transcript=transcript,
         context=context,
+        codebase_context=codebase_context,
         verbose=verbose,
     )
 
@@ -201,3 +225,49 @@ def _wrap_report(
         header += f"**Context:** {context}\n"
     header += "\n---\n\n"
     return header + report
+
+
+# ---------------------------------------------------------------------------
+# Cache helpers
+# ---------------------------------------------------------------------------
+
+CACHE_DIR = os.path.join(".eyeroll", "cache")
+
+
+def _cache_key(source: str, backend: str, model: str | None) -> str:
+    """Generate a cache key from source + backend + model."""
+    # For local files, hash file content; for URLs, hash the URL
+    if os.path.isfile(source):
+        with open(source, "rb") as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()[:16]
+        key_input = f"{file_hash}:{backend}:{model or 'default'}"
+    else:
+        key_input = f"{source}:{backend}:{model or 'default'}"
+    return hashlib.sha256(key_input.encode()).hexdigest()[:16]
+
+
+def _cache_load(key: str) -> str | None:
+    """Load a cached report if it exists."""
+    meta_path = os.path.join(CACHE_DIR, f"{key}.json")
+    report_path = os.path.join(CACHE_DIR, f"{key}.md")
+    if os.path.isfile(meta_path) and os.path.isfile(report_path):
+        with open(report_path) as f:
+            return f.read()
+    return None
+
+
+def _cache_save(key: str, source: str, report: str) -> None:
+    """Save a report to cache."""
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        meta = {
+            "source": source,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "key": key,
+        }
+        with open(os.path.join(CACHE_DIR, f"{key}.json"), "w") as f:
+            json.dump(meta, f, indent=2)
+        with open(os.path.join(CACHE_DIR, f"{key}.md"), "w") as f:
+            f.write(report)
+    except OSError:
+        pass  # cache write failure is not fatal

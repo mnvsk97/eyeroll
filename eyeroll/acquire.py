@@ -6,8 +6,14 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-SUPPORTED_VIDEO_EXTS = {".mp4", ".webm", ".mov", ".avi", ".mkv"}
-SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+SUPPORTED_VIDEO_EXTS = {
+    ".mp4", ".webm", ".mov", ".avi", ".mkv", ".flv", ".ts", ".m4v",
+    ".wmv", ".3gp", ".ogv", ".mpg", ".mpeg", ".m2ts", ".mts",
+}
+SUPPORTED_IMAGE_EXTS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif",
+    ".heic", ".heif", ".avif",
+}
 SUPPORTED_EXTS = SUPPORTED_VIDEO_EXTS | SUPPORTED_IMAGE_EXTS
 
 

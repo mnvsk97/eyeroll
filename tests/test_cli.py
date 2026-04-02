@@ -44,10 +44,12 @@ def test_watch_local_file(runner, tmp_path):
     mock_watch.assert_called_once_with(
         source="/fake/video.mp4",
         context=None,
+        codebase_context=None,
         max_frames=20,
         backend_name=None,
         model=None,
         verbose=False,
+        no_cache=False,
     )
 
 
@@ -184,3 +186,32 @@ def test_init_validation_failure(runner, tmp_path):
         result = runner.invoke(cli, ["init"], input="bad-key\n")
 
     assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# eyeroll watch --codebase-context
+# ---------------------------------------------------------------------------
+
+def test_watch_with_codebase_context_inline(runner):
+    with patch("eyeroll.watch.watch", return_value="report") as mock_watch:
+        result = runner.invoke(cli, [
+            "watch", "/fake/video.mp4",
+            "--codebase-context", "Python app, key file: src/api.py",
+        ])
+
+    assert result.exit_code == 0
+    assert mock_watch.call_args[1]["codebase_context"] == "Python app, key file: src/api.py"
+
+
+def test_watch_with_codebase_context_file(runner, tmp_path):
+    ctx_file = tmp_path / "context.md"
+    ctx_file.write_text("## Project: myapp\n**Stack:** Python")
+
+    with patch("eyeroll.watch.watch", return_value="report") as mock_watch:
+        result = runner.invoke(cli, [
+            "watch", "/fake/video.mp4",
+            "--codebase-context", str(ctx_file),
+        ])
+
+    assert result.exit_code == 0
+    assert mock_watch.call_args[1]["codebase_context"] == "## Project: myapp\n**Stack:** Python"

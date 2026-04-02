@@ -182,3 +182,51 @@ def test_synthesize_report_with_transcript():
 
     prompt = mock_backend.generate.call_args[0][0]
     assert "The user says: click the button" in prompt
+
+
+# ---------------------------------------------------------------------------
+# synthesize_report — codebase context
+# ---------------------------------------------------------------------------
+
+def test_synthesize_report_with_codebase_context():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Report"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        synthesize_report(
+            frame_analyses=[{"frame_index": 0, "timestamp": 0.0, "analysis": "test"}],
+            codebase_context="## Project: myapp\n**Stack:** Python\n- src/api.py",
+        )
+
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "## Project: myapp" in prompt
+    assert "src/api.py" in prompt
+
+
+def test_synthesize_report_no_codebase_context():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Report"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        synthesize_report()
+
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "no codebase context available" in prompt
+    assert "hypotheses" in prompt
+
+
+def test_synthesis_prompt_has_confidence_tiers():
+    """Verify the prompt instructs the model to categorize claims."""
+    assert "Visible in recording" in SYNTHESIS_PROMPT
+    assert "Informed by codebase context" in SYNTHESIS_PROMPT
+    assert "Hypothesis" in SYNTHESIS_PROMPT
+
+
+def test_synthesis_prompt_has_bug_description():
+    """Verify the prompt includes a Bug Description section."""
+    assert "Bug Description" in SYNTHESIS_PROMPT
+
+
+def test_synthesis_prompt_forbids_invented_paths():
+    """Verify the prompt tells the model not to invent file paths."""
+    assert "NEVER state a file path as fact unless it appears in the codebase context" in SYNTHESIS_PROMPT

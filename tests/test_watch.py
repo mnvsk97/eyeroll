@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-from eyeroll.watch import watch, _wrap_report
+from eyeroll.watch import watch, _wrap_report, _cache_key, _cache_save, _cache_load
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +41,8 @@ def test_watch_local_image(tmp_image_path):
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
          patch("eyeroll.watch.analyze_frames", return_value=[
              {"frame_index": 0, "timestamp": 0.0, "analysis": "Image frame analysis"}
          ]) as mock_af, \
@@ -67,6 +69,8 @@ def test_watch_video_direct_upload(tmp_video_path):
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
          patch("eyeroll.watch.acquire", return_value={
              "file_path": tmp_video_path,
              "media_type": "video",
@@ -101,6 +105,8 @@ def test_watch_video_frame_by_frame(tmp_video_path):
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
          patch("eyeroll.watch.acquire", return_value={
              "file_path": tmp_video_path,
              "media_type": "video",
@@ -139,6 +145,8 @@ def test_watch_large_video_fallback(tmp_video_path):
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
          patch("eyeroll.watch.acquire", return_value={
              "file_path": tmp_video_path,
              "media_type": "video",
@@ -173,6 +181,8 @@ def test_watch_long_video_fallback(tmp_video_path):
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
          patch("eyeroll.watch.acquire", return_value={
              "file_path": tmp_video_path,
              "media_type": "video",
@@ -212,6 +222,8 @@ def test_watch_cleans_up_url_download(tmp_path):
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
          patch("eyeroll.watch.acquire", return_value={
              "file_path": str(tmp_video),
              "media_type": "video",
@@ -232,3 +244,119 @@ def test_watch_cleans_up_url_download(tmp_path):
 
     # rmtree should be called for the parent dir of the downloaded file
     mock_rmtree.assert_any_call(str(tmp_video.parent), ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# watch() — codebase context integration
+# ---------------------------------------------------------------------------
+
+def test_watch_passes_codebase_context(tmp_image_path):
+    """watch() passes codebase_context to synthesize_report."""
+    mock_backend = MagicMock()
+    mock_backend.supports_video = True
+    mock_backend.supports_audio = True
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
+         patch("eyeroll.watch.analyze_frames", return_value=[
+             {"frame_index": 0, "timestamp": 0.0, "analysis": "test"}
+         ]), \
+         patch("eyeroll.watch.synthesize_report", return_value="## Report") as mock_sr:
+        watch(tmp_image_path, codebase_context="## Project: myapp\n**Stack:** Python")
+
+    assert mock_sr.call_args[1]["codebase_context"] == "## Project: myapp\n**Stack:** Python"
+
+
+def test_watch_works_without_codebase_context(tmp_image_path):
+    """watch() works fine when no codebase context is provided."""
+    mock_backend = MagicMock()
+    mock_backend.supports_video = True
+    mock_backend.supports_audio = True
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
+         patch("eyeroll.watch.analyze_frames", return_value=[
+             {"frame_index": 0, "timestamp": 0.0, "analysis": "test"}
+         ]), \
+         patch("eyeroll.watch.synthesize_report", return_value="## Report") as mock_sr:
+        result = watch(tmp_image_path)
+
+    assert "# eyeroll:" in result
+    assert mock_sr.call_args[1]["codebase_context"] is None
+
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+
+def test_cache_key_deterministic(tmp_image_path):
+    """Same inputs produce the same cache key."""
+    k1 = _cache_key(tmp_image_path, "gemini", None)
+    k2 = _cache_key(tmp_image_path, "gemini", None)
+    assert k1 == k2
+
+
+def test_cache_key_differs_by_backend(tmp_image_path):
+    k1 = _cache_key(tmp_image_path, "gemini", None)
+    k2 = _cache_key(tmp_image_path, "ollama", None)
+    assert k1 != k2
+
+
+def test_cache_key_url():
+    """URLs produce a stable key without file I/O."""
+    k = _cache_key("https://loom.com/share/abc123", "gemini", None)
+    assert len(k) == 16
+
+
+def test_cache_save_and_load(tmp_path):
+    with patch("eyeroll.watch.CACHE_DIR", str(tmp_path)):
+        _cache_save("testkey", "https://example.com/video", "# Report content")
+        result = _cache_load("testkey")
+    assert result == "# Report content"
+
+
+def test_cache_load_miss(tmp_path):
+    with patch("eyeroll.watch.CACHE_DIR", str(tmp_path)):
+        assert _cache_load("nonexistent") is None
+
+
+def test_watch_returns_cached_report(tmp_image_path):
+    """When cache hits, watch returns cached report without running analysis."""
+    mock_backend = MagicMock()
+    mock_backend.supports_video = True
+    mock_backend.supports_audio = True
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value="# Cached report"), \
+         patch("eyeroll.watch.acquire") as mock_acquire, \
+         patch("eyeroll.watch.analyze_frames") as mock_af:
+        result = watch(tmp_image_path)
+
+    assert result == "# Cached report"
+    mock_acquire.assert_not_called()
+    mock_af.assert_not_called()
+
+
+def test_watch_no_cache_flag_skips_cache(tmp_image_path):
+    """--no-cache forces fresh analysis even if cache exists."""
+    mock_backend = MagicMock()
+    mock_backend.supports_video = True
+    mock_backend.supports_audio = True
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load") as mock_cache_load, \
+         patch("eyeroll.watch._cache_save"), \
+         patch("eyeroll.watch.analyze_frames", return_value=[
+             {"frame_index": 0, "timestamp": 0.0, "analysis": "test"}
+         ]), \
+         patch("eyeroll.watch.synthesize_report", return_value="## Fresh Report"):
+        result = watch(tmp_image_path, no_cache=True)
+
+    mock_cache_load.assert_not_called()
+    assert "# eyeroll:" in result

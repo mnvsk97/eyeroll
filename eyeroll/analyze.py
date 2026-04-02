@@ -53,6 +53,9 @@ Here are the raw observations from the video:
 ## Audio transcript (if available):
 {transcript}
 
+## Codebase context (project structure, tech stack, key files):
+{codebase_context}
+
 ---
 
 Synthesize this into structured, actionable notes. Output EXACTLY this format:
@@ -89,6 +92,30 @@ What the person said (key points only). Or "(silent recording)" if no audio.
 ### Confidence: [high/medium/low]
 State your confidence and explain what's clear vs ambiguous.
 
+### Bug Description
+Describe the bug or issue shown in the recording in plain language.
+- What is the expected behavior vs. the actual behavior?
+- What triggers the issue?
+If this isn't a bug, describe the feature being demonstrated or requested instead.
+
+### Fix Directions
+You are helping a coding agent working INSIDE the user's codebase. Categorize every claim:
+
+**Visible in recording** (directly observed — error messages, URLs, UI state, code on screen):
+- List specific observations with exact quoted text
+
+**Informed by codebase context** (referencing files/functions from the project context above):
+- Only reference files and functions that appear in the "Codebase context" section
+- Explain which file and why it's relevant
+
+**Hypothesis (not confirmed)** (educated guesses about root cause):
+- Clearly label these as guesses
+- Explain the reasoning behind each guess
+
+**Suggested search patterns**: grep/ripgrep patterns the coding agent should run to locate relevant code.
+**How to fix**: concrete steps. Reference actual project files when codebase context is available.
+**What to verify**: how to confirm the fix works.
+
 ### Suggested Next Steps
 Based on what was shown, what actions could a developer take?
 (e.g., fix a bug, build a feature, investigate further, create a skill, etc.)
@@ -105,7 +132,9 @@ Rules:
 - If you're unsure about something, say "unclear" rather than guessing
 - If the context text adds useful information, incorporate it
 - Don't assume this is a bug — it could be a demo, tutorial, feature request, or anything else
-- Keep it concise and actionable"""
+- Keep it concise and actionable
+- In Fix Directions, NEVER state a file path as fact unless it appears in the codebase context section. If no codebase context is available, ALL file paths are hypotheses — say so explicitly. Use "search for [pattern]" instead of inventing paths.
+- The "Fix Directions" section is CRITICAL — this report will be read by a coding agent, not a human. Be precise and codebase-oriented."""
 
 
 def analyze_frames(
@@ -192,6 +221,7 @@ def synthesize_report(
     video_analysis: str | None = None,
     transcript: str | None = None,
     context: str | None = None,
+    codebase_context: str | None = None,
     backend_name: str | None = None,
     verbose: bool = False,
     **backend_kwargs,
@@ -217,6 +247,7 @@ def synthesize_report(
         frame_analyses=frame_text,
         context=context or "(no additional context provided)",
         transcript=transcript or "(no audio / silent recording)",
+        codebase_context=codebase_context or "(no codebase context available — all file paths and function names below are hypotheses, not confirmed facts)",
     )
 
     if verbose:

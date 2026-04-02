@@ -26,12 +26,26 @@ def test_detect_video_types():
     assert detect_media_type("video.mp4") == "video"
     assert detect_media_type("video.webm") == "video"
     assert detect_media_type("video.mov") == "video"
+    assert detect_media_type("video.avi") == "video"
+    assert detect_media_type("video.mkv") == "video"
+    assert detect_media_type("video.flv") == "video"
+    assert detect_media_type("video.ts") == "video"
+    assert detect_media_type("video.m4v") == "video"
+    assert detect_media_type("video.wmv") == "video"
+    assert detect_media_type("video.3gp") == "video"
+    assert detect_media_type("video.mpg") == "video"
+    assert detect_media_type("video.mpeg") == "video"
 
 
 def test_detect_image_types():
     assert detect_media_type("screenshot.png") == "image"
     assert detect_media_type("screenshot.jpg") == "image"
     assert detect_media_type("screenshot.gif") == "image"
+    assert detect_media_type("screenshot.webp") == "image"
+    assert detect_media_type("screenshot.bmp") == "image"
+    assert detect_media_type("screenshot.tiff") == "image"
+    assert detect_media_type("screenshot.heic") == "image"
+    assert detect_media_type("screenshot.avif") == "image"
 
 
 def test_detect_media_type_unsupported():

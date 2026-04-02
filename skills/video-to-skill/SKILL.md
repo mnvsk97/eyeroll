@@ -42,21 +42,29 @@ Or: `export GEMINI_API_KEY=your-key`
 ## Workflow
 
 ```
-1. Run: eyeroll watch <source> --context "create a skill from this" --verbose
-2. Read the structured notes — identify:
+1. Check for .eyeroll/context.md (if missing, suggest /eyeroll:init)
+2. Check if skills/ directory exists, read existing skills for patterns
+
+3. Run: eyeroll watch <source> \
+     --context "create a skill from this" \
+     --codebase-context .eyeroll/context.md \
+     --verbose
+
+3. Read the report — identify:
    - What workflow/process is demonstrated
    - What commands/tools are used
-   - What inputs does it take
-   - What outputs does it produce
-   - What are the trigger phrases (when should this skill activate)
-3. Design the skill:
+   - What inputs and outputs
+   - Trigger phrases (when should this skill activate)
+
+4. Design the skill:
    - Name: concise, lowercase, hyphenated
    - Description: what it does and when to trigger
    - Instructions: step-by-step agent instructions
    - Setup: any dependencies or env vars needed
-4. Generate SKILL.md following the agent skills spec
-5. If the skill needs scripts, scaffold them
-6. Validate: does the SKILL.md make sense? Are instructions clear?
+
+5. Generate SKILL.md following the agent skills spec
+6. If the skill needs scripts, scaffold them
+7. Validate: does the SKILL.md make sense? Are instructions clear?
 ```
 
 ## Example Interactions

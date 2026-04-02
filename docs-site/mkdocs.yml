@@ -1,0 +1,62 @@
+site_name: eyeroll
+site_description: AI eyes that roll through video footage — watch, understand, act
+site_url: https://mnvsk97.github.io/eyeroll
+
+repo_url: https://github.com/mnvsk97/eyeroll
+repo_name: mnvsk97/eyeroll
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - attr_list
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Install: getting-started/install.md
+      - Setup: getting-started/setup.md
+      - Quick Start: getting-started/quickstart.md
+  - Commands:
+      - /eyeroll:watch: commands/watch.md
+      - /eyeroll:fix: commands/fix.md
+      - /eyeroll:init: commands/init.md
+      - /eyeroll:history: commands/history.md
+  - Backends:
+      - Overview: backends/overview.md
+      - Gemini: backends/gemini.md
+      - OpenAI: backends/openai.md
+      - Ollama: backends/ollama.md
+  - CLI Reference: cli.md
+  - How It Works: how-it-works.md
+  - Development: development.md

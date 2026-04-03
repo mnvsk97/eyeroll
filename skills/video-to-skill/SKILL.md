@@ -3,7 +3,7 @@ name: video-to-skill
 description: >
   Watch a tutorial or demo video and generate a Claude Code skill from it.
   Activated when user says "create a skill from this video" or similar.
-user-invocable: false
+user-invocable: true
 ---
 
 # Video to Skill

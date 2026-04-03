@@ -4,5 +4,14 @@
   "description": "AI eyes that roll through video footage. Analyze screen recordings, Loom videos, and screenshots to fix bugs and build features.",
   "author": {
     "name": "mnvsk97"
-  }
+  },
+  "commands": [
+    "commands/init.md",
+    "commands/watch.md",
+    "commands/fix.md",
+    "commands/history.md"
+  ],
+  "skills": [
+    "skills/video-to-skill/SKILL.md"
+  ]
 }

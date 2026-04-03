@@ -28,13 +28,7 @@ Read the report. Extract:
 - URLs and routes visible
 - Fix Directions (search patterns, hypotheses)
 
-Search the codebase using the suggested patterns:
-```bash
-grep -r "<error string>" .
-grep -r "<function or config name>" .
-```
-
-Read the identified files. Cross-reference with the video observations.
+Search the codebase using the suggested patterns with `Grep` and `Glob` tools. Cross-reference with the video observations.
 
 If context mentions a regression ("after PR #X", "since last deploy"):
 ```bash

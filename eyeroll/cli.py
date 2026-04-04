@@ -136,7 +136,6 @@ def _validate_openai(api_key: str) -> None:
         raise RuntimeError("API key accepted but got empty response.")
 
 
-
 @cli.command()
 @click.argument("source")
 @click.option("--context", "-c", default=None,
@@ -149,8 +148,8 @@ def _validate_openai(api_key: str) -> None:
               help="Model override (e.g., qwen3-vl:8b for ollama, gemini-2.0-flash for gemini).")
 @click.option("--codebase-context", "-cc", default=None,
               help="Codebase context (inline text or path to a file like .eyeroll/context.md).")
-@click.option("--parallel", "-p", default=1, show_default=True, type=int,
-              help="Concurrent workers for frame analysis (1=sequential, 3-5 recommended).")
+@click.option("--parallel", "-p", default=None, type=int,
+              help="Concurrent workers for frame analysis. Default: 3 for ollama, 1 for others.")
 @click.option("--no-cache", is_flag=True, help="Skip cache and force fresh analysis.")
 @click.option("--output", "-o", default=None,
               help="Write output to file instead of stdout.")
@@ -183,6 +182,11 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
             backend = "openai"
         else:
             backend = "ollama"
+
+    # Default parallel workers: 3 for API backends (separate servers), 1 for ollama (single GPU)
+    if parallel is None:
+        effective_backend = backend or os.environ.get("EYEROLL_BACKEND", "gemini")
+        parallel = 1 if effective_backend == "ollama" else 3
 
     # Resolve --codebase-context: if it's a file path, read it
     if codebase_context and os.path.isfile(os.path.expanduser(codebase_context)):

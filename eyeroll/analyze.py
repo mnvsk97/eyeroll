@@ -58,9 +58,20 @@ Here are the raw observations from the video:
 
 ---
 
-Synthesize this into structured, actionable notes. Output EXACTLY this format:
+First, determine what KIND of content this is based on the visual evidence, audio, and context:
+- **Bug report**: shows broken behavior, errors, unexpected results
+- **Feature demo**: demonstrates working functionality, a new feature, or a product walkthrough
+- **Tutorial/how-to**: teaches a process or workflow step by step
+- **Feature request**: shows desired behavior or a mockup/design
+- **Code review**: walks through code changes or PR diffs
+- **General notes**: anything else (meeting recording, brainstorm, etc.)
+
+Then synthesize into structured, actionable notes. Output EXACTLY this format:
 
 ## Video Analysis
+
+### Content Type: [bug report | feature demo | tutorial | feature request | code review | general notes]
+State what kind of content this is and your confidence level.
 
 ### Summary
 One or two sentences describing what this video shows.
@@ -92,33 +103,53 @@ What the person said (key points only). Or "(silent recording)" if no audio.
 ### Confidence: [high/medium/low]
 State your confidence and explain what's clear vs ambiguous.
 
-### Bug Description
-Describe the bug or issue shown in the recording in plain language.
+### Analysis
+<!-- Adapt this section based on content type -->
+
+**If bug report:**
 - What is the expected behavior vs. the actual behavior?
 - What triggers the issue?
-If this isn't a bug, describe the feature being demonstrated or requested instead.
+- Categorize evidence:
+  - **Visible in recording**: directly observed errors, URLs, UI state (quote exact text)
+  - **Informed by codebase context**: only reference files from the codebase context section
+  - **Hypothesis (not confirmed)**: educated guesses, clearly labeled
+- Suggested search patterns for the coding agent
+- How to fix (concrete steps, reference actual project files when context is available)
+- How to verify the fix
 
-### Fix Directions
-You are helping a coding agent working INSIDE the user's codebase. Categorize every claim:
+**If feature demo:**
+- What feature or workflow is being demonstrated?
+- Key capabilities shown
+- How it relates to the codebase (if context is available)
 
-**Visible in recording** (directly observed — error messages, URLs, UI state, code on screen):
-- List specific observations with exact quoted text
+**If tutorial/how-to:**
+- What process or workflow is being taught?
+- Tools and commands used (list them)
+- Key steps to reproduce the workflow
+- Could this be turned into an automated skill or script?
 
-**Informed by codebase context** (referencing files/functions from the project context above):
-- Only reference files and functions that appear in the "Codebase context" section
-- Explain which file and why it's relevant
+**If feature request:**
+- What is being requested or proposed?
+- What does the desired behavior look like?
+- How does it differ from current behavior (if visible)?
 
-**Hypothesis (not confirmed)** (educated guesses about root cause):
-- Clearly label these as guesses
-- Explain the reasoning behind each guess
+**If code review:**
+- What files/functions are being reviewed?
+- Key changes discussed
+- Concerns or approvals noted
 
-**Suggested search patterns**: grep/ripgrep patterns the coding agent should run to locate relevant code.
-**How to fix**: concrete steps. Reference actual project files when codebase context is available.
-**What to verify**: how to confirm the fix works.
+**If general notes:**
+- Key points and takeaways
+- Action items mentioned
 
 ### Suggested Next Steps
-Based on what was shown, what actions could a developer take?
-(e.g., fix a bug, build a feature, investigate further, create a skill, etc.)
+Based on content type, suggest the most appropriate actions:
+- Bug report → investigate and fix the code, raise a PR
+- Feature demo → document it, create notes for the team
+- Tutorial → create a reusable skill or automation from it
+- Feature request → spec it out, create implementation tasks
+- Code review → address feedback, update the PR
+- General → summarize and share with relevant people
 
 ### Clarifying Questions
 List any questions that would help understand what was shown better.
@@ -131,10 +162,10 @@ Rules:
 - Quote text from the screen EXACTLY — don't paraphrase
 - If you're unsure about something, say "unclear" rather than guessing
 - If the context text adds useful information, incorporate it
-- Don't assume this is a bug — it could be a demo, tutorial, feature request, or anything else
+- Do NOT assume this is a bug — determine content type from evidence first
 - Keep it concise and actionable
-- In Fix Directions, NEVER state a file path as fact unless it appears in the codebase context section. If no codebase context is available, ALL file paths are hypotheses — say so explicitly. Use "search for [pattern]" instead of inventing paths.
-- The "Fix Directions" section is CRITICAL — this report will be read by a coding agent, not a human. Be precise and codebase-oriented."""
+- NEVER state a file path as fact unless it appears in the codebase context section. If no codebase context is available, ALL file paths are hypotheses — say so explicitly.
+- This report will be read by a coding agent, not a human. Be precise and codebase-oriented when relevant, but don't force technical analysis on non-technical content."""
 
 
 def analyze_frames(

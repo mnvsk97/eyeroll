@@ -67,6 +67,7 @@ def test_watch_video_direct_upload(tmp_video_path):
     mock_backend.supports_video = True
     mock_backend.supports_audio = True
 
+
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
          patch("eyeroll.watch._cache_load", return_value=None), \
@@ -98,6 +99,7 @@ def test_watch_video_frame_by_frame(tmp_video_path):
     mock_backend = MagicMock()
     mock_backend.supports_video = False
     mock_backend.supports_audio = False
+
 
     frames = [
         {"frame_path": "/tmp/f0.jpg", "timestamp": 0.0, "frame_index": 0},
@@ -139,6 +141,7 @@ def test_watch_large_video_fallback(tmp_video_path):
     mock_backend.supports_video = True
     mock_backend.supports_audio = True
 
+
     frames = [
         {"frame_path": "/tmp/f0.jpg", "timestamp": 0.0, "frame_index": 0},
     ]
@@ -174,6 +177,7 @@ def test_watch_long_video_fallback(tmp_video_path):
     mock_backend = MagicMock()
     mock_backend.supports_video = True
     mock_backend.supports_audio = True
+
 
     frames = [
         {"frame_path": "/tmp/f0.jpg", "timestamp": 0.0, "frame_index": 0},
@@ -217,6 +221,7 @@ def test_watch_cleans_up_url_download(tmp_path):
     mock_backend = MagicMock()
     mock_backend.supports_video = False
     mock_backend.supports_audio = False
+
 
     frames = [{"frame_path": "/tmp/f0.jpg", "timestamp": 0.0, "frame_index": 0}]
 

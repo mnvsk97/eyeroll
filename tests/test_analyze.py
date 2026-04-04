@@ -235,17 +235,25 @@ def test_synthesize_report_no_codebase_context():
 
 
 def test_synthesis_prompt_has_confidence_tiers():
-    """Verify the prompt instructs the model to categorize claims."""
+    """Verify the prompt instructs the model to categorize claims for bug reports."""
     assert "Visible in recording" in SYNTHESIS_PROMPT
     assert "Informed by codebase context" in SYNTHESIS_PROMPT
     assert "Hypothesis" in SYNTHESIS_PROMPT
 
 
-def test_synthesis_prompt_has_bug_description():
-    """Verify the prompt includes a Bug Description section."""
-    assert "Bug Description" in SYNTHESIS_PROMPT
+def test_synthesis_prompt_detects_content_type():
+    """Verify the prompt asks the model to determine content type."""
+    assert "Content Type" in SYNTHESIS_PROMPT
+    assert "bug report" in SYNTHESIS_PROMPT
+    assert "feature demo" in SYNTHESIS_PROMPT
+    assert "tutorial" in SYNTHESIS_PROMPT
 
 
 def test_synthesis_prompt_forbids_invented_paths():
     """Verify the prompt tells the model not to invent file paths."""
     assert "NEVER state a file path as fact unless it appears in the codebase context" in SYNTHESIS_PROMPT
+
+
+def test_synthesis_prompt_does_not_assume_bugs():
+    """Verify the prompt explicitly says not to assume bugs."""
+    assert "Do NOT assume this is a bug" in SYNTHESIS_PROMPT

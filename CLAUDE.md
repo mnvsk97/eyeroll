@@ -38,6 +38,7 @@ eyeroll watch <path> --verbose --output report.md         # verbose + write to f
 ## Backends
 
 - **gemini** (default): Gemini Flash API. Supports direct video upload, audio transcription. Requires GEMINI_API_KEY.
+- **openai**: OpenAI GPT-4o. Frame-by-frame image analysis + Whisper audio transcription. Requires OPENAI_API_KEY.
 - **ollama**: Local models via Ollama. Supports frame-by-frame image analysis only (no direct video, no audio). Default model: qwen3-vl. No API key needed.
 
 ## Key design decisions

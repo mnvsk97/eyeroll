@@ -1,0 +1,21 @@
+{
+  "name": "mnvsk97-eyeroll",
+  "owner": {
+    "name": "mnvsk97"
+  },
+  "metadata": {
+    "description": "AI eyes that roll through video footage. Analyze screen recordings, Loom videos, and screenshots to fix bugs and build features.",
+    "version": "0.3.3"
+  },
+  "plugins": [
+    {
+      "name": "eyeroll",
+      "description": "AI eyes that roll through video footage. Analyze screen recordings, Loom videos, and screenshots to fix bugs and build features.",
+      "version": "0.3.3",
+      "author": {
+        "name": "mnvsk97"
+      },
+      "source": "./plugins/eyeroll"
+    }
+  ]
+}

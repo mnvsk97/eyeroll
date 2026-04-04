@@ -126,7 +126,7 @@ eyeroll/
     video-to-skill/      ← activated by "create a skill from this video"
   eyeroll/               ← Python CLI package
     cli.py, watch.py, analyze.py, extract.py, backend.py, history.py
-  tests/                 ← 143 unit + 8 integration tests
+  tests/                 ← 144 unit + 8 integration tests
 ```
 
 ## Supported inputs

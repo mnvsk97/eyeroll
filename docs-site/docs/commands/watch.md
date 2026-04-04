@@ -39,24 +39,41 @@ If you mention context in conversation without using the `--context` flag, the a
 
 ## Report structure
 
-The synthesized report includes:
+The report first classifies the content type, then adapts its analysis sections accordingly.
+
+### Content type detection
+
+eyeroll determines what kind of content the video shows:
+
+| Content Type | Example | Analysis Focus |
+|---|---|---|
+| **Bug report** | Error on screen, broken behavior | Expected vs actual, fix directions, search patterns |
+| **Feature demo** | Working feature walkthrough | Capabilities shown, codebase relevance |
+| **Tutorial** | Step-by-step how-to | Process, tools used, skill automation potential |
+| **Feature request** | Mockup or desired behavior | What's requested, how it differs from current |
+| **Code review** | PR diff walkthrough | Files reviewed, concerns noted |
+| **General notes** | Meeting, brainstorm | Key takeaways, action items |
+
+### Common sections
+
+Every report includes:
 
 | Section | Content |
 |---|---|
+| **Content Type** | Classification with confidence level |
 | **Summary** | One-sentence description of what the video shows |
 | **What's Happening** | Step-by-step walkthrough |
 | **Key Details** | Exact text from screen -- errors, URLs, status codes |
 | **Audio/Narration** | What the person said (or "silent recording") |
-| **Observations** | What works, what's broken |
+| **Observations** | What works, what's broken, what's demonstrated |
 | **Environment Clues** | Browser, OS, URLs, version numbers |
-| **Bug Description** | Expected vs. actual behavior, trigger |
-| **Fix Directions** | Categorized into Visible / Codebase-informed / Hypothesis |
-| **Suggested Next Steps** | Actionable recommendations |
+| **Analysis** | Adapted per content type (see above) |
+| **Suggested Next Steps** | Context-aware recommendations |
 | **Clarifying Questions** | Only if something is genuinely unclear |
 
-### Fix Directions confidence tiers
+### Evidence confidence tiers (bug reports)
 
-The Fix Directions section categorizes every claim:
+For bug reports, the Analysis section categorizes every claim:
 
 - **Visible in recording** -- directly observed (error messages, URLs, UI state)
 - **Informed by codebase context** -- references files from `.eyeroll/context.md`

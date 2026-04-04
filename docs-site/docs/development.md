@@ -19,7 +19,7 @@ uv sync
 ## Running tests
 
 ```bash
-# Unit tests (143 tests, mocked -- no API calls)
+# Unit tests (144 tests, mocked -- no API calls)
 pytest
 
 # With coverage
@@ -87,7 +87,9 @@ A single GitHub Actions workflow (`.github/workflows/ci.yml`) handles both testi
 
 **Cache intermediates, not reports**: The expensive operations are frame analysis and audio transcription. Synthesis is cheap. Caching intermediates lets users re-run with different context without re-analyzing.
 
-**Confidence tiers in Fix Directions**: Every claim in the report is categorized as directly observed, informed by codebase context, or hypothesis. This prevents coding agents from hallucinating file paths.
+**Content-adaptive reports**: The synthesis prompt classifies the video content (bug, tutorial, demo, etc.) and adapts the analysis sections accordingly, rather than assuming everything is a bug.
+
+**Confidence tiers**: For bug reports, every claim is categorized as directly observed, informed by codebase context, or hypothesis. This prevents coding agents from hallucinating file paths.
 
 **No OpenCV**: Frame deduplication uses JPEG file size comparison instead of perceptual hashing. This avoids a heavy dependency while being good enough for screen recordings where static frames compress similarly.
 
@@ -102,7 +104,7 @@ python -m build
 
 ## Release checklist
 
-1. Bump version in `pyproject.toml`
+1. Bump version in `pyproject.toml` and `.claude-plugin/plugin.json`
 2. Run full test suite: `pytest`
 3. Run integration tests: `pytest tests/test_integration.py -v -m integration`
 4. Push to `main` -- CI publishes to PyPI automatically

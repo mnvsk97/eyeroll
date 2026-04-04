@@ -75,13 +75,18 @@ Used in all other cases. Each extracted frame is analyzed individually with a st
 
 ### Parallel analysis
 
-Frame analysis can run in parallel with the `--parallel` flag:
+Frame analysis runs in parallel by default for API backends:
+
+- **Gemini / OpenAI**: 3 concurrent workers (requests go to separate servers)
+- **Ollama**: 1 worker (single GPU, concurrency adds overhead)
+
+Override with the `--parallel` flag:
 
 ```bash
-eyeroll watch video.mp4 -p 4
+eyeroll watch video.mp4 -p 5
 ```
 
-This sends 4 frame analysis requests concurrently. Useful for cloud backends where network latency dominates. Results are sorted back into frame order after completion.
+Results are sorted back into frame order after completion.
 
 ## Caching
 
@@ -128,11 +133,9 @@ The synthesis step combines all signals into a structured report. It receives:
 - User-provided context text
 - Codebase context from `.eyeroll/context.md`
 
-The prompt instructs the model to produce a report with specific sections (summary, steps, key details, fix directions, etc.) and to categorize every claim by confidence level.
+The prompt first classifies the content type (bug report, tutorial, feature demo, feature request, code review, or general notes) based on visual evidence, then adapts the analysis sections accordingly. For bug reports, evidence is categorized into confidence tiers:
 
-### Fix Directions confidence tiers
-
-The Fix Directions section is the most important part for coding agents. Every claim is categorized:
+### Evidence confidence tiers (bug reports)
 
 | Tier | Meaning | Example |
 |---|---|---|
@@ -141,6 +144,15 @@ The Fix Directions section is the most important part for coding agents. Every c
 | **Hypothesis** | Educated guess, not confirmed | "The user object may not have a Stripe customer ID, which would cause this error" |
 
 This tiered approach prevents the coding agent from treating guesses as facts. Without codebase context, all file paths are explicitly labeled as hypotheses.
+
+### Content-adaptive suggestions
+
+The report's suggested next steps adapt to the content type:
+
+- **Bug report** → investigate and fix, raise a PR
+- **Tutorial** → create a reusable skill or automation
+- **Feature demo** → document, create notes
+- **Feature request** → spec it out, create tasks
 
 ## Supported inputs
 

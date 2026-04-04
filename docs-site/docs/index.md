@@ -8,8 +8,8 @@ eyeroll is a Claude Code plugin that analyzes screen recordings, Loom videos, Yo
 
 1. You share a video or screenshot (URL or local file)
 2. eyeroll extracts frames, analyzes them with a vision model, transcribes audio
-3. It produces a structured report with bug descriptions, fix directions, and search patterns
-4. Your coding agent uses the report to grep the codebase, find the issue, and fix it
+3. It classifies the content (bug report, tutorial, feature demo, etc.) and produces a structured report
+4. Your coding agent uses the report to fix bugs, create skills, build features, or take notes
 
 ## Quick install
 

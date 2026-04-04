@@ -39,7 +39,7 @@ eyeroll watch <source> [options]
 | `--backend` | `-b` | `EYEROLL_BACKEND` or `gemini` | Backend: `gemini`, `openai`, or `ollama` |
 | `--model` | `-m` | Backend default | Model override |
 | `--max-frames` | | 20 | Maximum key frames to analyze |
-| `--parallel` | `-p` | 1 | Concurrent workers for frame analysis |
+| `--parallel` | `-p` | 3 (API) / 1 (ollama) | Concurrent workers for frame analysis |
 | `--no-cache` | | false | Skip cache, force fresh analysis |
 | `--output` | `-o` | stdout | Write report to file |
 | `--verbose` | `-v` | false | Show progress details |

@@ -91,7 +91,7 @@ def _save_env(key: str, value: str) -> None:
     lines = []
     if os.path.exists(_ENV_PATH):
         with open(_ENV_PATH) as f:
-            lines = [l for l in f.readlines() if not l.startswith(f"{key}=")]
+            lines = [line for line in f.readlines() if not line.startswith(f"{key}=")]
     lines.append(f"{key}={value}\n")
     with open(_ENV_PATH, "w") as f:
         f.writelines(lines)
@@ -176,11 +176,9 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
 
     # --model without --backend: infer backend from model name
     if model and not backend:
-        if model.startswith("gemini"):
-            pass  # default backend is gemini
-        elif model.startswith("gpt") or model.startswith("o1") or model.startswith("o3"):
+        if model.startswith("gpt") or model.startswith("o1") or model.startswith("o3"):
             backend = "openai"
-        else:
+        elif not model.startswith("gemini"):
             backend = "ollama"
 
     # Default parallel workers: 3 for API backends (separate servers), 1 for ollama (single GPU)

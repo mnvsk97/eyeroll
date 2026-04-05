@@ -15,7 +15,8 @@ eyeroll is a Claude Code plugin that analyzes screen recordings, Loom videos, Yo
 
 ```bash
 # Add the plugin to Claude Code
-npx skills add mnvsk97/eyeroll
+/plugin marketplace add mnvsk97/eyeroll
+/plugin install eyeroll@mnvsk97-eyeroll
 
 # Install the CLI with your preferred backend
 pip install eyeroll[gemini]

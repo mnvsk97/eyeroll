@@ -2,7 +2,7 @@
 
 import json
 import os
-import glob as glob_mod
+import glob
 
 CACHE_DIR = os.path.join(".eyeroll", "cache")
 
@@ -20,7 +20,7 @@ def list_history(limit: int | None = None) -> list[dict]:
         return []
 
     entries = []
-    for meta_path in glob_mod.glob(os.path.join(CACHE_DIR, "*.json")):
+    for meta_path in glob.glob(os.path.join(CACHE_DIR, "*.json")):
         try:
             with open(meta_path) as f:
                 meta = json.load(f)
@@ -60,7 +60,7 @@ def clear_history() -> None:
     if not os.path.isdir(CACHE_DIR):
         return
 
-    for filepath in glob_mod.glob(os.path.join(CACHE_DIR, "*")):
+    for filepath in glob.glob(os.path.join(CACHE_DIR, "*")):
         try:
             os.remove(filepath)
         except OSError:

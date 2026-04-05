@@ -1,5 +1,6 @@
 """Analyze video frames and audio to produce structured notes."""
 
+import os
 import sys
 
 from .backend import get_backend
@@ -240,7 +241,6 @@ def analyze_video_direct(
     backend = get_backend(backend_name, **backend_kwargs)
 
     if verbose:
-        import os
         file_size_mb = os.path.getsize(video_path) / (1024 * 1024)
         print(
             f"  Sending full video ({file_size_mb:.1f}MB, {duration:.0f}s)...",

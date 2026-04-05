@@ -15,6 +15,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+IMAGE_MIME_TYPES = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp",
+}
+
 
 class AnalysisError(RuntimeError):
     """Raised when analysis fails."""
@@ -135,9 +140,7 @@ class GeminiBackend(Backend):
         with open(image_path, "rb") as f:
             image_bytes = f.read()
         ext = os.path.splitext(image_path)[1].lower()
-        mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-                    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
-        mime_type = mime_map.get(ext, "image/jpeg")
+        mime_type = IMAGE_MIME_TYPES.get(ext, "image/jpeg")
 
         response = self._client.models.generate_content(
             model=self._model,
@@ -221,9 +224,7 @@ class OpenAIBackend(Backend):
         with open(image_path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode("utf-8")
         ext = os.path.splitext(image_path)[1].lower()
-        mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-                    ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
-        mime_type = mime_map.get(ext, "image/jpeg")
+        mime_type = IMAGE_MIME_TYPES.get(ext, "image/jpeg")
 
         response = self._client.chat.completions.create(
             model=self._model,

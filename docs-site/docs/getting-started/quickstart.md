@@ -5,8 +5,9 @@ Three steps to analyze your first video.
 ## 1. Install
 
 ```bash
-npx skills add mnvsk97/eyeroll
-pip install eyeroll[gemini,download]
+/plugin marketplace add mnvsk97/eyeroll
+/plugin install eyeroll@mnvsk97-eyeroll
+pip install eyeroll[gemini]
 ```
 
 ## 2. Initialize

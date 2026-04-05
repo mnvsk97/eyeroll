@@ -18,9 +18,9 @@ List and manage past video analyses from the cache.
 Output:
 
 ```
-[2025-12-15 14:30] https://loom.com/share/abc123 (video (00:45)) -- 123a284dacc6a103
-[2025-12-15 10:15] ./bug.mp4 (video (01:22)) -- e086216d2028cfa8
-[2025-12-14 09:00] ./screenshot.png (screenshot) -- 4ebf8366855cd994
+[2025-06-15 14:30] https://loom.com/share/abc123 (video (00:45)) -- 123a284dacc6a103
+[2025-06-15 10:15] ./bug.mp4 (video (01:22)) -- e086216d2028cfa8
+[2025-06-14 09:00] ./screenshot.png (screenshot) -- 4ebf8366855cd994
 ```
 
 Each entry shows: timestamp, source, media type, and cache key.
@@ -45,7 +45,7 @@ Returns structured JSON for programmatic use:
 [
   {
     "source": "https://loom.com/share/abc123",
-    "timestamp": "2025-12-15T14:30:00+00:00",
+    "timestamp": "2025-06-15T14:30:00+00:00",
     "key": "123a284dacc6a103",
     "media_type": "video (00:45)",
     "title": "Bug recording"

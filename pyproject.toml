@@ -8,9 +8,9 @@ authors = [
     { name = "mnvsk97", email = "mnvsk97@gmail.com" },
 ]
 readme = "README.md"
-keywords = ["video", "ai", "agent", "skills", "bug-report", "gemini", "claude-code"]
+keywords = ["video", "ai", "agent", "skills", "bug-report", "gemini", "openai", "ollama", "screenshot", "claude-code"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",

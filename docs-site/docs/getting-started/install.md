@@ -2,10 +2,11 @@
 
 ## Claude Code plugin
 
-Add the eyeroll skill to Claude Code:
+Add the eyeroll plugin to Claude Code:
 
 ```bash
-npx skills add mnvsk97/eyeroll
+/plugin marketplace add mnvsk97/eyeroll
+/plugin install eyeroll@mnvsk97-eyeroll
 ```
 
 This registers the `/eyeroll:watch`, `/eyeroll:fix`, `/eyeroll:init`, and `/eyeroll:history` slash commands.
@@ -17,19 +18,19 @@ Install the Python CLI with the backend you want:
 === "Gemini (recommended)"
 
     ```bash
-    pip install eyeroll[gemini,download]
+    pip install eyeroll[gemini]
     ```
 
 === "OpenAI"
 
     ```bash
-    pip install eyeroll[openai,download]
+    pip install eyeroll[openai]
     ```
 
 === "Ollama (local, no API key)"
 
     ```bash
-    pip install eyeroll[download]
+    pip install eyeroll
     ```
 
 === "Everything"
@@ -38,7 +39,8 @@ Install the Python CLI with the backend you want:
     pip install eyeroll[all]
     ```
 
-The `download` extra installs `yt-dlp` for downloading videos from URLs. If you only analyze local files, you can omit it.
+!!! tip "URL downloads"
+    To analyze videos from URLs (YouTube, Loom, etc.), you also need `yt-dlp`. Add the `download` extra: `pip install eyeroll[gemini,download]`. If you only analyze local files, you don't need it. The `all` extra includes everything.
 
 ## Prerequisites
 

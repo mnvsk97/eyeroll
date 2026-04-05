@@ -75,6 +75,8 @@ Ollama only supports image analysis, not direct video or audio. eyeroll always u
 - Frame-by-frame only -- no motion or timing context
 - Quality depends on model size and hardware
 - Slower than cloud backends on most hardware
+- `qwen3-vl:8b` has known issues reading screen recordings -- use the default `qwen3-vl` or `qwen3-vl:2b` instead
+- `qwen3-vl:2b` can be slow on the synthesis step for longer videos
 
 !!! warning "Silent recordings"
     Most developer screen recordings are silent, so the lack of audio transcription is often not a problem. But if the video has spoken narration, important context will be missed with Ollama.

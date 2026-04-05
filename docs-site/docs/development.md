@@ -19,7 +19,7 @@ uv sync
 ## Running tests
 
 ```bash
-# Unit tests (144 tests, mocked -- no API calls)
+# Unit tests (mocked -- no API calls)
 pytest
 
 # With coverage
@@ -42,27 +42,28 @@ pytest tests/test_integration.py -v -m integration
 ## Project structure
 
 ```
-eyeroll/
+eyeroll/                          # Python CLI package
   __init__.py
-  acquire.py          # Download from URLs, resolve local files
-  extract.py          # ffmpeg: key frame extraction, audio extraction
-  analyze.py          # Backend-agnostic analysis, synthesis prompts
-  backend.py          # Backend ABC + Gemini, OpenAI, Ollama implementations
-  watch.py            # Pipeline orchestrator, caching
-  history.py          # Cache listing, retrieval, clearing
-  cli.py              # Click CLI (init, watch, history)
+  acquire.py                      # Download from URLs, resolve local files
+  extract.py                      # ffmpeg: key frame extraction, audio extraction
+  analyze.py                      # Backend-agnostic analysis, synthesis prompts
+  backend.py                      # Backend ABC + Gemini, OpenAI, Ollama implementations
+  watch.py                        # Pipeline orchestrator, caching
+  history.py                      # Cache listing, retrieval, clearing
+  cli.py                          # Click CLI (init, watch, history)
 
-commands/             # Claude Code slash commands
-  init.md             # /eyeroll:init
-  watch.md            # /eyeroll:watch
-  fix.md              # /eyeroll:fix
-  history.md          # /eyeroll:history
-
-skills/               # Background skills
-  video-to-skill/     # Activated by "create a skill from this video"
+plugins/eyeroll/                  # Claude Code plugin
+  .claude-plugin/plugin.json      # Plugin manifest
+  commands/                       # Slash commands
+    init.md                       # /eyeroll:init
+    watch.md                      # /eyeroll:watch
+    fix.md                        # /eyeroll:fix
+    history.md                    # /eyeroll:history
+  skills/                         # Background skills
+    video-to-skill/               # Activated by "create a skill from this video"
 
 tests/
-  conftest.py         # Shared fixtures
+  conftest.py                     # Shared fixtures (synthetic video generation)
   test_acquire.py
   test_analyze.py
   test_backend.py
@@ -70,7 +71,7 @@ tests/
   test_extract.py
   test_history.py
   test_watch.py
-  test_integration.py # Real API tests (marked, skipped by default)
+  test_integration.py             # Real API tests (marked, skipped by default)
 ```
 
 ## CI/CD
@@ -104,7 +105,7 @@ python -m build
 
 ## Release checklist
 
-1. Bump version in `pyproject.toml` and `.claude-plugin/plugin.json`
+1. Bump version in `pyproject.toml` and `plugins/eyeroll/.claude-plugin/plugin.json`
 2. Run full test suite: `pytest`
 3. Run integration tests: `pytest tests/test_integration.py -v -m integration`
 4. Push to `main` -- CI publishes to PyPI automatically

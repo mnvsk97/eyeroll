@@ -20,9 +20,9 @@ Use `AskUserQuestion` with these options:
 - `Ollama` — Local models, private, no API key needed
 
 Then install:
-- Gemini: `pip install eyeroll[gemini,download]`
-- OpenAI: `pip install eyeroll[openai,download]`
-- Ollama: `pip install eyeroll[download]`
+- Gemini: `pip install eyeroll[gemini]`
+- OpenAI: `pip install eyeroll[openai]`
+- Ollama: `pip install eyeroll`
 
 ## Step 2: Run eyeroll init
 

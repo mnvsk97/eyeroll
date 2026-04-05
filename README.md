@@ -1,5 +1,10 @@
 # eyeroll
 
+[![CI](https://github.com/mnvsk97/eyeroll/actions/workflows/ci.yml/badge.svg)](https://github.com/mnvsk97/eyeroll/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/eyeroll)](https://pypi.org/project/eyeroll/)
+[![Python](https://img.shields.io/pypi/pyversions/eyeroll)](https://pypi.org/project/eyeroll/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 AI eyes that roll through video footage — watch, understand, act.
 
 eyeroll is a Claude Code plugin that analyzes screen recordings, Loom videos, YouTube links, and screenshots, then helps coding agents fix bugs, build features, and create skills.

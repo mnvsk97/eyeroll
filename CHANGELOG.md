@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.4
+
+- OSS readiness: code cleanup, docs consistency, contributor tooling
+- Add GitHub issue templates and PR template
+- Add CI, PyPI, Python version, and license badges to README
+- Unify plugin install commands to marketplace format across all docs
+- Fix project structure paths in development docs
+- Extract duplicated MIME map, remove dead code, clean up imports
+- Add Ollama qwen3-vl:8b known limitations to docs
+- Bump status from Alpha to Beta
+
 ## 0.3.3
 
 - Content-adaptive synthesis: detects bug/demo/tutorial/feature-request/code-review and adapts report sections

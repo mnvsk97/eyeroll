@@ -29,6 +29,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/mnvsk97/eyeroll"
 Repository = "https://github.com/mnvsk97/eyeroll"
+Documentation = "https://mnvsk97.github.io/eyeroll"
 Issues = "https://github.com/mnvsk97/eyeroll/issues"
 
 [project.scripts]

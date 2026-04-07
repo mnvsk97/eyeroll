@@ -30,7 +30,9 @@ Thumbs.db
 *.jpg
 *.jpeg
 !docs/*.png
-!tests/fixtures/*
+!tests/fixtures/*.mp4
+!tests/fixtures/*.mov
+tests/fixtures/synthetic/
 output/
 tmp/
 .eyeroll/

@@ -20,7 +20,6 @@ eyeroll is a Claude Code plugin that analyzes screen recordings, Loom videos, Yo
 pip install eyeroll[gemini]      # Gemini Flash API (recommended)
 pip install eyeroll[openai]      # OpenAI GPT-4o + OpenRouter/Groq/Grok/Cerebras
 pip install eyeroll              # Ollama only (local, no API key)
-pip install eyeroll[google-auth] # Gemini service account auth
 pip install eyeroll[all]         # everything
 ```
 
@@ -108,8 +107,7 @@ eyeroll history
 | **groq** | Frame-by-frame | Yes | GROQ_API_KEY | cheap | Low latency |
 | **grok** | Frame-by-frame | Yes | GROK_API_KEY | varies | xAI models |
 | **cerebras** | Frame-by-frame | Yes | CEREBRAS_API_KEY | cheap | Fast inference |
-| **gemini-sa** | Frame-by-frame | Yes | GOOGLE_APPLICATION_CREDENTIALS | ~$0.15 | GCP service accounts |
-| **openai-compat** | Frame-by-frame | Yes | any env var | varies | Custom/self-hosted endpoints |
+| **openai-compat** | Frame-by-frame | No | any env var | varies | Custom/self-hosted endpoints |
 
 Ollama auto-installs if not found (macOS/Linux).
 

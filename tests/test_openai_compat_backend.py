@@ -1,109 +1,146 @@
-"""Tests for OpenAICompatibleBackend and GeminiServiceAccountBackend."""
+"""Tests for OpenAI-compatible provider support in OpenAIBackend."""
 
 import os
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from eyeroll.backend import (
     AnalysisError,
-    GeminiServiceAccountBackend,
-    OpenAICompatibleBackend,
+    OpenAIBackend,
+    _OPENAI_COMPAT_PROVIDERS,
     get_backend,
     reset_backend,
 )
 
 
 # ---------------------------------------------------------------------------
-# Helper: create an OpenAICompatibleBackend without hitting any API
+# Helper
 # ---------------------------------------------------------------------------
 
-def _make_compat(provider=None, base_url=None, api_key="test-key", model=None):
-    """Create an OpenAICompatibleBackend with a mocked OpenAI client."""
+def _make_openai_compat(provider=None, **kwargs):
+    """Create an OpenAIBackend for a known provider, with the OpenAI client mocked."""
+    url, key_env, default_model, has_whisper = _OPENAI_COMPAT_PROVIDERS[provider]
     mock_openai_mod = MagicMock()
-    env = {"OPENAI_API_KEY": api_key}
     with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
-         patch.dict(os.environ, env):
-        kwargs = {}
-        if provider is not None:
-            kwargs["provider"] = provider
-        if base_url is not None:
-            kwargs["base_url"] = base_url
-        if model is not None:
-            kwargs["model"] = model
-        return OpenAICompatibleBackend(api_key=api_key, **kwargs)
+         patch.dict(os.environ, {key_env: "test-key"}):
+        return OpenAIBackend(
+            model=kwargs.get("model", default_model),
+            base_url=url,
+            api_key_env=key_env,
+            has_whisper=has_whisper,
+        )
 
 
 # ---------------------------------------------------------------------------
-# Constructor — known provider
+# _OPENAI_COMPAT_PROVIDERS preset values
 # ---------------------------------------------------------------------------
 
-def test_known_provider_groq():
-    backend = _make_compat(provider="groq")
+@pytest.mark.parametrize("name", ["openrouter", "groq", "grok", "cerebras"])
+def test_provider_preset_exists(name):
+    assert name in _OPENAI_COMPAT_PROVIDERS
+
+
+@pytest.mark.parametrize("name", ["openrouter", "groq", "grok", "cerebras"])
+def test_provider_has_whisper_false(name):
+    """None of the compat providers have the Whisper endpoint."""
+    _, _, _, has_whisper = _OPENAI_COMPAT_PROVIDERS[name]
+    assert has_whisper is False
+
+
+def test_gemini_not_in_compat_providers():
+    """Gemini is handled by the native GeminiBackend, not the compat layer."""
+    assert "gemini" not in _OPENAI_COMPAT_PROVIDERS
+
+
+# ---------------------------------------------------------------------------
+# Constructor — known providers via get_backend()
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name,key_env", [
+    ("openrouter", "OPENROUTER_API_KEY"),
+    ("groq",       "GROQ_API_KEY"),
+    ("grok",       "GROK_API_KEY"),
+    ("cerebras",   "CEREBRAS_API_KEY"),
+])
+def test_get_backend_known_provider(name, key_env):
+    mock_openai_mod = MagicMock()
+    with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
+         patch.dict(os.environ, {key_env: "test-key"}):
+        backend = get_backend(name)
+        assert isinstance(backend, OpenAIBackend)
+
+
+def test_get_backend_openai_compat_with_base_url():
+    mock_openai_mod = MagicMock()
+    with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
+         patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+        backend = get_backend("openai-compat", base_url="https://custom.server/v1")
+        assert isinstance(backend, OpenAIBackend)
+
+
+def test_get_backend_openai_compat_has_whisper_false():
+    """Custom compat endpoints default to has_whisper=False."""
+    mock_openai_mod = MagicMock()
+    with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
+         patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+        backend = get_backend("openai-compat", base_url="https://custom.server/v1")
+        assert backend.supports_audio is False
+
+
+# ---------------------------------------------------------------------------
+# Default models
+# ---------------------------------------------------------------------------
+
+def test_groq_default_model():
+    backend = _make_openai_compat("groq")
     assert backend._model == "llama-3.3-70b-versatile"
 
 
-def test_known_provider_openrouter():
-    backend = _make_compat(provider="openrouter")
+def test_openrouter_default_model():
+    backend = _make_openai_compat("openrouter")
     assert backend._model == "openai/gpt-4o"
 
 
-def test_known_provider_grok():
-    backend = _make_compat(provider="grok")
+def test_grok_default_model():
+    backend = _make_openai_compat("grok")
     assert backend._model == "grok-2-vision-1212"
 
 
-def test_known_provider_cerebras():
-    backend = _make_compat(provider="cerebras")
+def test_cerebras_default_model():
+    backend = _make_openai_compat("cerebras")
     assert backend._model == "llama3.1-70b"
 
 
-def test_known_provider_openai():
-    backend = _make_compat(provider="openai")
-    assert backend._model == "gpt-4o"
-
-
-def test_known_provider_gemini():
-    backend = _make_compat(provider="gemini")
-    assert backend._model == "gemini-2.0-flash"
-
-
-def test_model_override_for_known_provider():
-    backend = _make_compat(provider="groq", model="llama3-8b-8192")
+def test_model_override():
+    backend = _make_openai_compat("groq", model="llama3-8b-8192")
     assert backend._model == "llama3-8b-8192"
 
 
 # ---------------------------------------------------------------------------
-# Constructor — custom base_url
+# API key resolution
 # ---------------------------------------------------------------------------
 
-def test_custom_base_url():
-    backend = _make_compat(base_url="https://my-server/v1", model="my-model")
-    assert backend._model == "my-model"
-
-
-def test_custom_base_url_default_model():
-    """Falls back to gpt-4o when no model is specified for a custom URL."""
-    backend = _make_compat(base_url="https://my-server/v1")
-    assert backend._model == "gpt-4o"
-
-
-# ---------------------------------------------------------------------------
-# Constructor — error cases
-# ---------------------------------------------------------------------------
-
-def test_unknown_provider_raises():
+def test_provider_specific_env_var_used():
+    """GROQ_API_KEY is picked up for the groq provider."""
     mock_openai_mod = MagicMock()
-    with patch.dict("sys.modules", {"openai": mock_openai_mod}):
-        with pytest.raises(ValueError, match="Unknown provider: 'notreal'"):
-            OpenAICompatibleBackend(provider="notreal", api_key="k")
+    env = {k: v for k, v in os.environ.items() if k not in ("GROQ_API_KEY", "OPENAI_API_KEY")}
+    env["GROQ_API_KEY"] = "groq-secret"
+    with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
+         patch.dict(os.environ, env, clear=True):
+        backend = get_backend("groq")
+        assert isinstance(backend, OpenAIBackend)
 
 
-def test_missing_base_url_and_provider_raises():
+def test_openai_key_fallback_for_provider():
+    """OPENAI_API_KEY is used when provider-specific key is absent."""
     mock_openai_mod = MagicMock()
-    with patch.dict("sys.modules", {"openai": mock_openai_mod}):
-        with pytest.raises(ValueError, match="Either provider= or base_url= must be supplied"):
-            OpenAICompatibleBackend(api_key="k")
+    env = {k: v for k, v in os.environ.items() if k not in ("GROQ_API_KEY", "OPENAI_API_KEY")}
+    env["OPENAI_API_KEY"] = "fallback-key"
+    with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
+         patch.dict(os.environ, env, clear=True):
+        backend = get_backend("groq")
+        assert isinstance(backend, OpenAIBackend)
 
 
 def test_missing_api_key_raises():
@@ -112,54 +149,44 @@ def test_missing_api_key_raises():
     with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
          patch.dict(os.environ, env, clear=True):
         with pytest.raises(AnalysisError, match="No API key found"):
-            OpenAICompatibleBackend(provider="groq")
-
-
-def test_provider_specific_env_var_used(monkeypatch):
-    """GROQ_API_KEY is picked up automatically for the groq provider."""
-    mock_openai_mod = MagicMock()
-    env = {k: v for k, v in os.environ.items() if k not in ("GROQ_API_KEY", "OPENAI_API_KEY")}
-    env["GROQ_API_KEY"] = "groq-secret"
-    with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
-         patch.dict(os.environ, env, clear=True):
-        # Should not raise — GROQ_API_KEY is present
-        backend = OpenAICompatibleBackend(provider="groq")
-        assert backend._model == "llama-3.3-70b-versatile"
-
-
-def test_openai_key_fallback_for_provider(monkeypatch):
-    """OPENAI_API_KEY is used as fallback when provider-specific key is absent."""
-    mock_openai_mod = MagicMock()
-    env = {k: v for k, v in os.environ.items() if k not in ("GROQ_API_KEY", "OPENAI_API_KEY")}
-    env["OPENAI_API_KEY"] = "fallback-key"
-    with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
-         patch.dict(os.environ, env, clear=True):
-        backend = OpenAICompatibleBackend(provider="groq")
-        assert backend._model == "llama-3.3-70b-versatile"
+            get_backend("groq")
 
 
 # ---------------------------------------------------------------------------
 # Capabilities
 # ---------------------------------------------------------------------------
 
-def test_supports_video_is_false():
-    backend = _make_compat(provider="groq")
+@pytest.mark.parametrize("name", ["openrouter", "groq", "grok", "cerebras"])
+def test_supports_video_is_false(name):
+    backend = _make_openai_compat(name)
     assert backend.supports_video is False
 
 
-def test_supports_audio_is_true():
-    backend = _make_compat(provider="groq")
-    assert backend.supports_audio is True
+@pytest.mark.parametrize("name", ["openrouter", "groq", "grok", "cerebras"])
+def test_supports_audio_is_false(name):
+    """Compat providers have no Whisper endpoint."""
+    backend = _make_openai_compat(name)
+    assert backend.supports_audio is False
 
 
 # ---------------------------------------------------------------------------
-# analyze_video raises AnalysisError
+# analyze_video raises
 # ---------------------------------------------------------------------------
 
 def test_analyze_video_raises(tmp_path):
-    backend = _make_compat(provider="groq")
-    with pytest.raises(AnalysisError, match="does not support direct video"):
+    backend = _make_openai_compat("groq")
+    with pytest.raises(AnalysisError, match="do not support direct video"):
         backend.analyze_video(str(tmp_path / "v.mp4"), "describe")
+
+
+# ---------------------------------------------------------------------------
+# analyze_audio raises for compat providers (no Whisper)
+# ---------------------------------------------------------------------------
+
+def test_analyze_audio_raises_for_compat_provider(tmp_video_path):
+    backend = _make_openai_compat("groq")
+    with pytest.raises(AnalysisError, match="Audio transcription is not supported"):
+        backend.analyze_audio(tmp_video_path, "transcribe")
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +194,7 @@ def test_analyze_video_raises(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_analyze_image_returns_content(tmp_image_path):
-    backend = _make_compat(provider="groq")
+    backend = _make_openai_compat("groq")
     mock_response = MagicMock()
     mock_response.choices = [MagicMock(message=MagicMock(content="Image analysis result"))]
     backend._client.chat.completions.create.return_value = mock_response
@@ -178,23 +205,11 @@ def test_analyze_image_returns_content(tmp_image_path):
 
 
 # ---------------------------------------------------------------------------
-# analyze_audio
-# ---------------------------------------------------------------------------
-
-def test_analyze_audio_returns_transcript(tmp_video_path):
-    backend = _make_compat(provider="groq")
-    backend._client.audio.transcriptions.create.return_value = MagicMock(text="Audio transcript")
-
-    result = backend.analyze_audio(tmp_video_path, "Transcribe")
-    assert result == "Audio transcript"
-
-
-# ---------------------------------------------------------------------------
 # generate
 # ---------------------------------------------------------------------------
 
 def test_generate_returns_text():
-    backend = _make_compat(provider="groq")
+    backend = _make_openai_compat("groq")
     mock_response = MagicMock()
     mock_response.choices = [MagicMock(message=MagicMock(content="Generated output"))]
     backend._client.chat.completions.create.return_value = mock_response
@@ -208,113 +223,23 @@ def test_generate_returns_text():
 
 
 # ---------------------------------------------------------------------------
-# get_backend() factory wiring
+# OpenAI proper still has Whisper
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name,key_env", [
-    ("openrouter", "OPENROUTER_API_KEY"),
-    ("groq",       "GROQ_API_KEY"),
-    ("grok",       "GROK_API_KEY"),
-    ("cerebras",   "CEREBRAS_API_KEY"),
-])
-def test_get_backend_factory_known_providers(name, key_env):
+def test_openai_proper_supports_audio():
+    """The standard openai backend (has_whisper=True) still works."""
     mock_openai_mod = MagicMock()
     with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
-         patch.dict(os.environ, {key_env: "test-key"}):
-        backend = get_backend(name)
-        assert isinstance(backend, OpenAICompatibleBackend)
+         patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}):
+        backend = OpenAIBackend()
+        assert backend.supports_audio is True
 
 
-def test_get_backend_openai_compat_with_base_url():
+def test_openai_proper_analyze_audio(tmp_video_path):
     mock_openai_mod = MagicMock()
     with patch.dict("sys.modules", {"openai": mock_openai_mod}), \
-         patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-        backend = get_backend("openai-compat", base_url="https://custom.server/v1")
-        assert isinstance(backend, OpenAICompatibleBackend)
-
-
-# ---------------------------------------------------------------------------
-# GeminiServiceAccountBackend
-# ---------------------------------------------------------------------------
-
-def _make_gemini_sa(tmp_path):
-    """Create a GeminiServiceAccountBackend with all external calls mocked."""
-    # Write a minimal fake credentials JSON (structure doesn't matter — SA loading is mocked)
-    creds_file = tmp_path / "credentials.json"
-    creds_file.write_text('{"type": "service_account"}')
-
-    mock_sa = MagicMock()
-    mock_creds = MagicMock()
-    mock_creds.token = "fake-bearer-token"
-    mock_sa.Credentials.from_service_account_file.return_value = mock_creds
-
-    mock_openai_mod = MagicMock()
-
-    with patch.dict("sys.modules", {
-            "google": MagicMock(),
-            "google.oauth2": MagicMock(),
-            "google.oauth2.service_account": mock_sa,
-            "google.auth": MagicMock(),
-            "google.auth.transport": MagicMock(),
-            "google.auth.transport.requests": MagicMock(),
-            "openai": mock_openai_mod,
-        }):
-        backend = GeminiServiceAccountBackend(credentials_path=str(creds_file))
-
-    return backend
-
-
-def test_gemini_sa_is_backend_instance(tmp_path):
-    from eyeroll.backend import Backend
-    backend = _make_gemini_sa(tmp_path)
-    assert isinstance(backend, Backend)
-
-
-def test_gemini_sa_supports_video_false(tmp_path):
-    backend = _make_gemini_sa(tmp_path)
-    assert backend.supports_video is False
-
-
-def test_gemini_sa_supports_audio_true(tmp_path):
-    backend = _make_gemini_sa(tmp_path)
-    assert backend.supports_audio is True
-
-
-def test_gemini_sa_missing_credentials_raises():
-    mock_sa = MagicMock()
-    with patch.dict("sys.modules", {
-            "google": MagicMock(),
-            "google.oauth2": MagicMock(),
-            "google.oauth2.service_account": mock_sa,
-            "google.auth": MagicMock(),
-            "google.auth.transport": MagicMock(),
-            "google.auth.transport.requests": MagicMock(),
-        }), \
-         patch.dict(os.environ, {k: v for k, v in os.environ.items()
-                                  if k != "GOOGLE_APPLICATION_CREDENTIALS"}, clear=True):
-        with pytest.raises(AnalysisError, match="No service account credentials found"):
-            GeminiServiceAccountBackend(credentials_path="/nonexistent/creds.json")
-
-
-def test_get_backend_gemini_sa(tmp_path):
-    """get_backend('gemini-sa') returns a GeminiServiceAccountBackend."""
-    creds_file = tmp_path / "credentials.json"
-    creds_file.write_text('{"type": "service_account"}')
-
-    mock_sa = MagicMock()
-    mock_creds = MagicMock()
-    mock_creds.token = "fake-token"
-    mock_sa.Credentials.from_service_account_file.return_value = mock_creds
-    mock_openai_mod = MagicMock()
-
-    with patch.dict("sys.modules", {
-            "google": MagicMock(),
-            "google.oauth2": MagicMock(),
-            "google.oauth2.service_account": mock_sa,
-            "google.auth": MagicMock(),
-            "google.auth.transport": MagicMock(),
-            "google.auth.transport.requests": MagicMock(),
-            "openai": mock_openai_mod,
-        }):
-        backend = get_backend("gemini-sa", credentials_path=str(creds_file))
-        assert isinstance(backend, GeminiServiceAccountBackend)
+         patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}):
+        backend = OpenAIBackend()
+        backend._client.audio.transcriptions.create.return_value = MagicMock(text="Transcript")
+        result = backend.analyze_audio(tmp_video_path, "transcribe")
+        assert result == "Transcript"

@@ -143,7 +143,7 @@ def _validate_openai(api_key: str) -> None:
 @click.option("--max-frames", default=20, show_default=True,
               help="Maximum key frames to analyze from video.")
 @click.option("--backend", "-b",
-              type=click.Choice(["gemini", "openai", "ollama", "openrouter", "groq", "grok", "cerebras", "gemini-sa", "openai-compat"]),
+              type=click.Choice(["gemini", "openai", "ollama", "openrouter", "groq", "grok", "cerebras", "openai-compat"]),
               default=None,
               help="Vision backend. Defaults to EYEROLL_BACKEND env var, then gemini.")
 @click.option("--base-url", default=None,
@@ -172,7 +172,6 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
       groq         Groq API (requires GROQ_API_KEY)
       grok         xAI Grok API (requires GROK_API_KEY)
       cerebras     Cerebras API (requires CEREBRAS_API_KEY)
-      gemini-sa    Gemini via service account (requires GOOGLE_APPLICATION_CREDENTIALS)
       openai-compat  Any OpenAI-compatible endpoint (requires --base-url)
 
     \b

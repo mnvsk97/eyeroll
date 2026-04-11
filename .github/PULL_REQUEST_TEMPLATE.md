@@ -1,14 +1,23 @@
-## Summary
-<!-- What does this PR do? 1-2 sentences. -->
+## What problem does this solve?
+<!-- 1-2 sentences. Link issues if relevant: Fixes #123 -->
 
-## Changes
-<!-- List the key changes. -->
+## What changed?
+<!-- List key changes -->
 -
 
-## Test plan
-<!-- How did you verify this works? -->
-- [ ] `pytest` passes
-- [ ] Tested manually with: <!-- describe -->
+## Proof it works
+<!-- Paste a screenshot, video, or terminal output showing it working locally. Required. -->
 
-## Related issues
-<!-- Link any related issues: Fixes #123, Related to #456 -->
+## Local test results
+- [ ] `pytest` passes locally
+- [ ] Tested manually with a real video/screenshot
+- [ ] Describe what you tested: <!-- e.g. "ran `eyeroll watch` on a Loom link" -->
+
+## Package update needed?
+- [ ] Python dependencies changed (`pyproject.toml`)
+- [ ] Version bump needed
+
+## Plugin/skill update needed?
+- [ ] Claude Code commands changed (`commands/`)
+- [ ] Claude Code skills changed (`skills/`)
+- [ ] No plugin changes

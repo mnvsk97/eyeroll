@@ -36,7 +36,10 @@ def test_watch_local_file(runner, tmp_path):
 
     # The CLI does: from .watch import watch as run_watch
     # So we patch eyeroll.watch.watch
-    with patch("eyeroll.watch.watch", return_value=report) as mock_watch:
+    # Clear EYEROLL_BACKEND so the default (gemini) is used and parallel=3
+    env = {k: v for k, v in os.environ.items() if k != "EYEROLL_BACKEND"}
+    with patch("eyeroll.watch.watch", return_value=report) as mock_watch, \
+         patch.dict(os.environ, env, clear=True):
         result = runner.invoke(cli, ["watch", "/fake/video.mp4"])
 
     assert result.exit_code == 0
@@ -48,6 +51,7 @@ def test_watch_local_file(runner, tmp_path):
         max_frames=20,
         backend_name=None,
         model=None,
+        base_url=None,
         verbose=False,
         no_cache=False,
         parallel=3,  # default for API backends (gemini)

@@ -45,8 +45,12 @@ openai = [
 download = [
     "yt-dlp>=2024.0",
 ]
+google-auth = [
+    "google-auth>=2.0",
+]
 all = [
     "google-genai>=1.0",
+    "google-auth>=2.0",
     "openai>=1.0",
     "yt-dlp>=2024.0",
 ]

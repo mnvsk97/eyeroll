@@ -142,8 +142,12 @@ def _validate_openai(api_key: str) -> None:
               help="Additional context (Slack message, issue description, what to do with the video, etc.)")
 @click.option("--max-frames", default=20, show_default=True,
               help="Maximum key frames to analyze from video.")
-@click.option("--backend", "-b", type=click.Choice(["gemini", "openai", "ollama"]), default=None,
+@click.option("--backend", "-b",
+              type=click.Choice(["gemini", "openai", "ollama", "openrouter", "groq", "grok", "cerebras", "gemini-sa", "openai-compat"]),
+              default=None,
               help="Vision backend. Defaults to EYEROLL_BACKEND env var, then gemini.")
+@click.option("--base-url", default=None,
+              help="Base URL for --backend openai-compat (e.g. https://my-server/v1).")
 @click.option("--model", "-m", default=None,
               help="Model override (e.g., qwen3-vl:8b for ollama, gemini-2.0-flash for gemini).")
 @click.option("--codebase-context", "-cc", default=None,
@@ -154,16 +158,22 @@ def _validate_openai(api_key: str) -> None:
 @click.option("--output", "-o", default=None,
               help="Write output to file instead of stdout.")
 @click.option("--verbose", "-v", is_flag=True, help="Show progress details.")
-def watch(source, context, codebase_context, max_frames, backend, model, parallel, no_cache, output, verbose):
+def watch(source, context, codebase_context, max_frames, backend, model, parallel, no_cache, output, verbose, base_url):
     """Analyze a video/screenshot and produce structured notes.
 
     SOURCE can be a URL (YouTube, Loom, etc.) or a local file path.
 
     \b
     Backends:
-      gemini   Google Gemini Flash API (default, requires GEMINI_API_KEY)
-      openai   OpenAI GPT-4o (requires OPENAI_API_KEY)
-      ollama   Local models via Ollama (e.g., qwen3-vl, no API key needed)
+      gemini       Google Gemini Flash API (default, requires GEMINI_API_KEY)
+      openai       OpenAI GPT-4o (requires OPENAI_API_KEY)
+      ollama       Local models via Ollama (e.g., qwen3-vl, no API key needed)
+      openrouter   OpenRouter API (requires OPENROUTER_API_KEY)
+      groq         Groq API (requires GROQ_API_KEY)
+      grok         xAI Grok API (requires GROK_API_KEY)
+      cerebras     Cerebras API (requires CEREBRAS_API_KEY)
+      gemini-sa    Gemini via service account (requires GOOGLE_APPLICATION_CREDENTIALS)
+      openai-compat  Any OpenAI-compatible endpoint (requires --base-url)
 
     \b
     Examples:
@@ -171,6 +181,8 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
       eyeroll watch ./recording.mp4 --context "checkout broken after PR #432"
       eyeroll watch demo.mp4 -c "create a skill from this" --backend ollama
       eyeroll watch screenshot.png -b ollama -m qwen3-vl:2b
+      eyeroll watch video.mp4 --backend groq
+      eyeroll watch video.mp4 --backend openai-compat --base-url https://my-server/v1
     """
     from .watch import watch as run_watch
 
@@ -180,6 +192,10 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
             backend = "openai"
         elif not model.startswith("gemini"):
             backend = "ollama"
+
+    # --base-url implies openai-compat if no backend specified
+    if base_url and not backend:
+        backend = "openai-compat"
 
     # Default parallel workers: 3 for API backends (separate servers), 1 for ollama (single GPU)
     if parallel is None:
@@ -199,6 +215,7 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
             max_frames=max_frames,
             backend_name=backend,
             model=model,
+            base_url=base_url,
             verbose=verbose,
             no_cache=no_cache,
             parallel=parallel,

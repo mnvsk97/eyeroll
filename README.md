@@ -18,8 +18,9 @@ eyeroll is a Claude Code plugin that analyzes screen recordings, Loom videos, Yo
 
 # Install the CLI
 pip install eyeroll[gemini]      # Gemini Flash API (recommended)
-pip install eyeroll[openai]      # OpenAI GPT-4o
+pip install eyeroll[openai]      # OpenAI GPT-4o + OpenRouter/Groq/Grok/Cerebras
 pip install eyeroll              # Ollama only (local, no API key)
+pip install eyeroll[google-auth] # Gemini service account auth
 pip install eyeroll[all]         # everything
 ```
 
@@ -65,6 +66,9 @@ eyeroll watch https://loom.com/share/abc123
 eyeroll watch ./bug.mp4 --context "checkout broken after PR #432"
 eyeroll watch ./bug.mp4 -cc .eyeroll/context.md --parallel 4
 eyeroll watch ./bug.mp4 --backend ollama -m qwen3-vl:2b
+eyeroll watch ./bug.mp4 --backend groq
+eyeroll watch ./bug.mp4 --backend openrouter -m anthropic/claude-3.5-sonnet
+eyeroll watch ./bug.mp4 --backend openai-compat --base-url https://my-server/v1
 eyeroll history
 ```
 
@@ -100,6 +104,12 @@ eyeroll history
 | **gemini** | Direct upload | Yes | GEMINI_API_KEY | ~$0.15 | Best quality |
 | **openai** | Frame-by-frame | Whisper | OPENAI_API_KEY | ~$0.20 | Existing OpenAI users |
 | **ollama** | Frame-by-frame | No | None | Free | Privacy, offline |
+| **openrouter** | Frame-by-frame | Yes | OPENROUTER_API_KEY | varies | Model variety |
+| **groq** | Frame-by-frame | Yes | GROQ_API_KEY | cheap | Low latency |
+| **grok** | Frame-by-frame | Yes | GROK_API_KEY | varies | xAI models |
+| **cerebras** | Frame-by-frame | Yes | CEREBRAS_API_KEY | cheap | Fast inference |
+| **gemini-sa** | Frame-by-frame | Yes | GOOGLE_APPLICATION_CREDENTIALS | ~$0.15 | GCP service accounts |
+| **openai-compat** | Frame-by-frame | Yes | any env var | varies | Custom/self-hosted endpoints |
 
 Ollama auto-installs if not found (macOS/Linux).
 

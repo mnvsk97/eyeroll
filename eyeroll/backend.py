@@ -4,6 +4,12 @@ Supports:
   - gemini: Google Gemini Flash API (requires GEMINI_API_KEY)
   - openai: OpenAI GPT-4o API (requires OPENAI_API_KEY)
   - ollama: Local Ollama with vision models like qwen3-vl (no API key needed)
+  - openrouter: OpenRouter API (requires OPENROUTER_API_KEY)
+  - groq: Groq API (requires GROQ_API_KEY)
+  - grok: xAI Grok API (requires GROK_API_KEY)
+  - cerebras: Cerebras API (requires CEREBRAS_API_KEY)
+  - gemini-sa: Gemini via service account credentials (requires GOOGLE_APPLICATION_CREDENTIALS)
+  - openai-compat: Any OpenAI-compatible endpoint (requires base_url + API key)
 """
 
 import base64
@@ -440,6 +446,191 @@ class OllamaBackend(Backend):
 
 
 # ---------------------------------------------------------------------------
+# OpenAI-Compatible Backend
+# ---------------------------------------------------------------------------
+
+# Maps provider name -> (base_url, api_key_env_var, default_model)
+_OPENAI_COMPAT_PROVIDERS = {
+    "openai":     ("https://api.openai.com/v1",                                 "OPENAI_API_KEY",     "gpt-4o"),
+    "openrouter": ("https://openrouter.ai/api/v1",                              "OPENROUTER_API_KEY", "openai/gpt-4o"),
+    "groq":       ("https://api.groq.com/openai/v1",                            "GROQ_API_KEY",       "llama-3.3-70b-versatile"),
+    "grok":       ("https://api.x.ai/v1",                                       "GROK_API_KEY",       "grok-2-vision-1212"),
+    "cerebras":   ("https://api.cerebras.ai/v1",                                "CEREBRAS_API_KEY",   "llama3.1-70b"),
+    "gemini":     ("https://generativelanguage.googleapis.com/v1beta/openai/",  "GEMINI_API_KEY",     "gemini-2.0-flash"),
+}
+
+
+class OpenAICompatibleBackend(Backend):
+    """Generic backend for any OpenAI-compatible API (OpenRouter, Groq, Grok, Cerebras, Gemini, etc.).
+
+    Usage:
+        # Known provider — base_url and API key env var are looked up automatically:
+        OpenAICompatibleBackend(provider="groq")
+
+        # Custom endpoint:
+        OpenAICompatibleBackend(base_url="https://my-server/v1", api_key="sk-...", model="my-model")
+    """
+
+    def __init__(
+        self,
+        provider: str | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        model: str | None = None,
+    ):
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError(
+                "OpenAI-compatible backend requires openai. Install with: pip install eyeroll[openai]"
+            )
+
+        if provider is not None:
+            if provider not in _OPENAI_COMPAT_PROVIDERS:
+                raise ValueError(
+                    f"Unknown provider: {provider!r}. "
+                    f"Known providers: {', '.join(_OPENAI_COMPAT_PROVIDERS)}. "
+                    "For a custom endpoint use base_url= instead."
+                )
+            default_url, key_env, default_model = _OPENAI_COMPAT_PROVIDERS[provider]
+            base_url = base_url or default_url
+            # Try the provider-specific env var first, then fall back to OPENAI_API_KEY
+            api_key = api_key or os.environ.get(key_env) or os.environ.get("OPENAI_API_KEY")
+            model = model or default_model
+        else:
+            if not base_url:
+                raise ValueError("Either provider= or base_url= must be supplied.")
+            api_key = api_key or os.environ.get("OPENAI_API_KEY")
+
+        if not api_key:
+            raise AnalysisError(
+                f"No API key found for {provider or base_url!r}.\n\n"
+                "Set the appropriate env var (e.g. GROQ_API_KEY, OPENROUTER_API_KEY) "
+                "or pass api_key= directly."
+            )
+
+        self._client = OpenAI(api_key=api_key, base_url=base_url)
+        self._model = model or "gpt-4o"
+
+    def analyze_image(self, image_path: str, prompt: str, verbose: bool = False) -> str:
+        with open(image_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        ext = os.path.splitext(image_path)[1].lower()
+        mime_type = IMAGE_MIME_TYPES.get(ext, "image/jpeg")
+
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64}"}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        )
+        return response.choices[0].message.content
+
+    def analyze_video(self, video_path: str, prompt: str, verbose: bool = False) -> str:
+        raise AnalysisError(
+            f"{self._model} does not support direct video upload. "
+            "Use frame-by-frame mode instead."
+        )
+
+    def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+        with open(audio_path, "rb") as f:
+            transcript = self._client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+            )
+        return transcript.text
+
+    def generate(self, prompt: str, verbose: bool = False) -> str:
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content
+
+    @property
+    def supports_video(self) -> bool:
+        return False
+
+    @property
+    def supports_audio(self) -> bool:
+        return True
+
+
+# ---------------------------------------------------------------------------
+# Gemini Service Account Backend
+# ---------------------------------------------------------------------------
+
+class GeminiServiceAccountBackend(Backend):
+    """Gemini via OpenAI-compatible endpoint, authenticated with a service account.
+
+    Uses google-auth to exchange a service account JSON file for a short-lived
+    Bearer token, then passes it to OpenAICompatibleBackend pointing at Gemini's
+    OpenAI-compat endpoint. Useful when you have a GCP service account but no
+    Gemini API key, or need Vertex AI billing.
+    """
+
+    def __init__(self, credentials_path: str | None = None, model: str = "gemini-2.0-flash"):
+        try:
+            from google.oauth2 import service_account
+            import google.auth.transport.requests
+        except ImportError:
+            raise ImportError(
+                "GeminiServiceAccount backend requires google-auth. "
+                "Install with: pip install eyeroll[google-auth]"
+            )
+
+        # Resolve credentials file: explicit arg > env var > default location
+        creds_path = (
+            credentials_path
+            or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+            or os.path.join(os.path.expanduser("~"), ".eyeroll", "credentials.json")
+        )
+        if not creds_path or not os.path.isfile(creds_path):
+            raise AnalysisError(
+                "No service account credentials found.\n\n"
+                "Set: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json\n"
+                "Or pass credentials_path= to GeminiServiceAccountBackend()"
+            )
+
+        creds = service_account.Credentials.from_service_account_file(
+            creds_path,
+            scopes=["https://www.googleapis.com/auth/generative-language"],
+        )
+        # Exchange service account for a short-lived Bearer token
+        creds.refresh(google.auth.transport.requests.Request())
+
+        self._delegate = OpenAICompatibleBackend(
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            api_key=creds.token,
+            model=model,
+        )
+
+    def analyze_image(self, image_path: str, prompt: str, verbose: bool = False) -> str:
+        return self._delegate.analyze_image(image_path, prompt, verbose)
+
+    def analyze_video(self, video_path: str, prompt: str, verbose: bool = False) -> str:
+        return self._delegate.analyze_video(video_path, prompt, verbose)
+
+    def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+        return self._delegate.analyze_audio(audio_path, prompt, verbose)
+
+    def generate(self, prompt: str, verbose: bool = False) -> str:
+        return self._delegate.generate(prompt, verbose)
+
+    @property
+    def supports_video(self) -> bool:
+        return self._delegate.supports_video
+
+    @property
+    def supports_audio(self) -> bool:
+        return self._delegate.supports_audio
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
@@ -450,8 +641,10 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
     """Get or create the active backend.
 
     Args:
-        name: 'gemini', 'openai', or 'ollama'. Defaults to EYEROLL_BACKEND env var, then 'gemini'.
-        **kwargs: passed to backend constructor (e.g., model, host).
+        name: Backend name. One of: 'gemini', 'openai', 'ollama', 'openrouter', 'groq',
+              'grok', 'cerebras', 'gemini-sa', 'openai-compat'.
+              Defaults to EYEROLL_BACKEND env var, then 'gemini'.
+        **kwargs: Passed to backend constructor (e.g., model, host, base_url).
     """
     global _current_backend
     if _current_backend is not None:
@@ -466,8 +659,19 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
         _current_backend = OpenAIBackend(**kwargs)
     elif name == "ollama":
         _current_backend = OllamaBackend(**kwargs)
+    elif name in ("openrouter", "groq", "grok", "cerebras"):
+        _current_backend = OpenAICompatibleBackend(provider=name, **kwargs)
+    elif name == "gemini-sa":
+        _current_backend = GeminiServiceAccountBackend(**kwargs)
+    elif name == "openai-compat":
+        # Requires base_url in kwargs; api_key and model are optional
+        _current_backend = OpenAICompatibleBackend(**kwargs)
     else:
-        raise ValueError(f"Unknown backend: {name}. Use 'gemini', 'openai', or 'ollama'.")
+        raise ValueError(
+            f"Unknown backend: {name}. "
+            "Use 'gemini', 'openai', 'ollama', 'openrouter', 'groq', 'grok', "
+            "'cerebras', 'gemini-sa', or 'openai-compat'."
+        )
 
     return _current_backend
 

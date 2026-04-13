@@ -72,11 +72,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set up Node.js (needed by yt-dlp for YouTube)
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
@@ -88,13 +83,14 @@ jobs:
       - name: Verify CLI is accessible
         run: eyeroll --help
 
-      - name: Configure yt-dlp to use Node.js runtime
+      - name: Generate synthetic test video
         run: |
-          mkdir -p ~/.config/yt-dlp
-          echo "--js-runtimes node" > ~/.config/yt-dlp/config
+          ffmpeg -f lavfi -i testsrc=duration=3:size=640x480:rate=1 \
+                 -f lavfi -i sine=frequency=440:duration=3 \
+                 -c:v libx264 -c:a aac -shortest /tmp/test-video.mp4
 
-      - name: Smoke test — watch a short YouTube video
-        run: eyeroll watch https://www.youtube.com/watch?v=jNQXAC9IVRw --backend openai
+      - name: Smoke test — analyze local video
+        run: eyeroll watch /tmp/test-video.mp4 --backend openai --context "CI smoke test with synthetic video"
 
       - name: Run integration tests
         run: pytest tests/test_integration.py -v -m integration

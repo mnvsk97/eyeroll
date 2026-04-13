@@ -21,12 +21,22 @@ eyeroll watch $ARGUMENTS --codebase-context .eyeroll/context.md --verbose
 
 If the user mentioned context in conversation, add `-c "<their words>"`.
 
-## Step 3: Diagnose
+## Step 3: Triage
+
+Read the report. Check the **Metadata** block first:
+- If **scope is out-of-context**, warn the user — the video doesn't relate to this codebase
+- If **actionable is no**, tell the user — there's nothing concrete to fix here
+- If **category is not bug**, note this — the fix command is designed for bugs
+
+Check **severity** to set urgency expectations (critical/moderate/low).
+
+## Step 4: Diagnose
 
 Read the report. Extract:
+- **Reproduction steps** (from the dedicated section)
 - Error messages (exact text)
 - URLs and routes visible
-- Fix Directions (search patterns, hypotheses)
+- Fix directions (search patterns, hypotheses)
 
 Search the codebase using the suggested patterns with `Grep` and `Glob` tools. Cross-reference with the video observations.
 
@@ -36,15 +46,15 @@ gh pr view <number>
 git log --since="1 week ago" -- <identified-files>
 ```
 
-## Step 4: Fix
+## Step 5: Fix
 
 Implement the fix. Keep changes minimal and focused.
 
-## Step 5: Test
+## Step 6: Test
 
 Run the project's test suite. If a test would have caught this bug, write one.
 
-## Step 6: PR
+## Step 7: PR
 
 Create a branch, commit, push, and open a PR:
 

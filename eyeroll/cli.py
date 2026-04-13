@@ -41,43 +41,90 @@ def init():
         click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
         return
 
-    # API key setup for gemini or openai
-    key_name = "GEMINI_API_KEY" if backend == "gemini" else "OPENAI_API_KEY"
-    existing_key = os.environ.get(key_name)
+    if backend == "gemini":
+        _setup_gemini()
+    else:
+        _setup_openai()
 
-    if existing_key:
-        if not click.confirm(f"{key_name} already set. Overwrite?", default=False):
-            _save_env("EYEROLL_BACKEND", backend)
-            click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
+    _save_env("EYEROLL_BACKEND", backend)
+    click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
+
+
+def _setup_gemini():
+    """Configure Gemini — API key or service account credentials."""
+    existing_key = os.environ.get("GEMINI_API_KEY")
+    existing_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    eyeroll_creds = os.path.join(os.path.expanduser("~"), ".eyeroll", "credentials.json")
+    has_creds = existing_creds or os.path.isfile(eyeroll_creds)
+
+    if existing_key or has_creds:
+        source = "GEMINI_API_KEY" if existing_key else "credentials.json"
+        if not click.confirm(f"\nGoogle credentials already configured ({source}). Overwrite?", default=False):
             return
 
-    if backend == "gemini":
-        prompt_text = (
-            f"Enter your Gemini API key\n"
-            f"  Get one at https://aistudio.google.com/apikey\n"
-            f"  (input is hidden)"
+    click.echo("\nHow do you want to authenticate with Google?\n")
+    click.echo("  1. API key         — get one at https://aistudio.google.com/apikey")
+    click.echo("  2. credentials.json — service account for Vertex AI\n")
+
+    auth_choice = click.prompt("Choose", type=click.Choice(["1", "2"]), default="1")
+
+    if auth_choice == "1":
+        api_key = click.prompt(
+            "Enter your Gemini API key\n"
+            "  (input is hidden)",
+            hide_input=True,
         )
+        _save_env("GEMINI_API_KEY", api_key)
+        os.environ["GEMINI_API_KEY"] = api_key
+
+        click.echo("Validating API key...")
+        try:
+            _validate_gemini(api_key)
+        except Exception as e:
+            click.secho(f"Validation failed: {e}", fg="red", err=True)
+            raise SystemExit(1)
     else:
-        prompt_text = (
-            f"Enter your OpenAI API key\n"
-            f"  Get one at https://platform.openai.com/api-keys\n"
-            f"  (input is hidden)"
+        creds_path = click.prompt(
+            "Path to your credentials.json\n"
+            "  (service account key file)",
         )
+        creds_path = os.path.expanduser(creds_path.strip())
+        if not os.path.isfile(creds_path):
+            click.secho(f"File not found: {creds_path}", fg="red", err=True)
+            raise SystemExit(1)
 
-    api_key = click.prompt(prompt_text, hide_input=True)
+        # Save the path so the backend finds it
+        _save_env("GOOGLE_APPLICATION_CREDENTIALS", creds_path)
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
+        click.echo(f"Saved credentials path: {creds_path}")
 
-    _save_env(key_name, api_key)
-    _save_env("EYEROLL_BACKEND", backend)
-    os.environ[key_name] = api_key
+        click.echo("Validating service account...")
+        try:
+            _validate_gemini_service_account(creds_path)
+        except Exception as e:
+            click.secho(f"Validation failed: {e}", fg="red", err=True)
+            raise SystemExit(1)
+
+
+def _setup_openai():
+    """Configure OpenAI API key."""
+    existing_key = os.environ.get("OPENAI_API_KEY")
+    if existing_key:
+        if not click.confirm(f"\nOPENAI_API_KEY already set. Overwrite?", default=False):
+            return
+
+    api_key = click.prompt(
+        "Enter your OpenAI API key\n"
+        "  Get one at https://platform.openai.com/api-keys\n"
+        "  (input is hidden)",
+        hide_input=True,
+    )
+    _save_env("OPENAI_API_KEY", api_key)
+    os.environ["OPENAI_API_KEY"] = api_key
 
     click.echo("Validating API key...")
-
     try:
-        if backend == "gemini":
-            _validate_gemini(api_key)
-        else:
-            _validate_openai(api_key)
-        click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
+        _validate_openai(api_key)
     except Exception as e:
         click.secho(f"Validation failed: {e}", fg="red", err=True)
         raise SystemExit(1)
@@ -114,6 +161,43 @@ def _validate_gemini(api_key: str) -> None:
     )
     if not response.text:
         raise RuntimeError("API key accepted but got empty response.")
+
+
+def _validate_gemini_service_account(creds_path: str) -> None:
+    """Validate a Gemini service account credentials file."""
+    try:
+        from google import genai
+        from google.oauth2 import service_account
+    except ImportError:
+        click.secho(
+            "Gemini SDK not installed. Run: pip install eyeroll[gemini]",
+            fg="red", err=True,
+        )
+        raise SystemExit(1)
+
+    import json
+    credentials = service_account.Credentials.from_service_account_file(
+        creds_path,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+    with open(creds_path) as f:
+        project_id = json.load(f).get("project_id")
+
+    client = genai.Client(
+        vertexai=True,
+        credentials=credentials,
+        project=project_id,
+        location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
+    )
+    from google.genai import types
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=types.Content(role="user", parts=[
+            types.Part(text="Say 'ok' if you can read this."),
+        ]),
+    )
+    if not response.text:
+        raise RuntimeError("Credentials accepted but got empty response.")
 
 
 def _validate_openai(api_key: str) -> None:

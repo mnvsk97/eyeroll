@@ -387,26 +387,23 @@ wheels = [
 
 [[package]]
 name = "eyeroll"
-version = "0.3.3"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "imageio-ffmpeg" },
     { name = "python-dotenv" },
+    { name = "yt-dlp" },
 ]
 
 [package.optional-dependencies]
 all = [
     { name = "google-genai" },
     { name = "openai" },
-    { name = "yt-dlp" },
 ]
 dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
-]
-download = [
-    { name = "yt-dlp" },
 ]
 gemini = [
     { name = "google-genai" },
@@ -426,10 +423,9 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "yt-dlp", marker = "extra == 'all'", specifier = ">=2024.0" },
-    { name = "yt-dlp", marker = "extra == 'download'", specifier = ">=2024.0" },
+    { name = "yt-dlp", specifier = ">=2024.0" },
 ]
-provides-extras = ["gemini", "openai", "download", "all", "dev"]
+provides-extras = ["gemini", "openai", "all", "dev"]
 
 [[package]]
 name = "google-auth"

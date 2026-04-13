@@ -1,6 +1,6 @@
 [project]
 name = "eyeroll"
-version = "0.3.4"
+version = "0.4.0"
 description = "AI eyes that roll through video footage — watch, understand, turn into code actions."
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -24,6 +24,7 @@ dependencies = [
     "click>=8.1",
     "python-dotenv>=1.0",
     "imageio-ffmpeg>=0.5",
+    "yt-dlp>=2024.0",
 ]
 
 [project.urls]
@@ -42,13 +43,9 @@ gemini = [
 openai = [
     "openai>=1.0",
 ]
-download = [
-    "yt-dlp>=2024.0",
-]
 all = [
     "google-genai>=1.0",
     "openai>=1.0",
-    "yt-dlp>=2024.0",
 ]
 dev = [
     "pytest>=7.0",

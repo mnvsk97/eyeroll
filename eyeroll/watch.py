@@ -236,13 +236,36 @@ def _wrap_report(
     backend_label: str,
 ) -> str:
     """Add metadata header to the report."""
+    # Extract metadata block from the report if present
+    metadata = _extract_metadata(report)
+
     header = f"# eyeroll: {title}\n"
     header += f"**Source type:** {media_type}\n"
     header += f"**Backend:** {backend_label}\n"
     if context:
         header += f"**Context:** {context}\n"
+    if metadata:
+        header += f"**Category:** {metadata.get('category', 'other')}\n"
+        header += f"**Confidence:** {metadata.get('confidence', 'medium')}\n"
+        header += f"**Scope:** {metadata.get('scope', 'out-of-context')}\n"
+        header += f"**Severity:** {metadata.get('severity', 'low')}\n"
+        header += f"**Actionable:** {metadata.get('actionable', 'no')}\n"
     header += "\n---\n\n"
     return header + report
+
+
+def _extract_metadata(report: str) -> dict | None:
+    """Parse the metadata code block from the synthesis report."""
+    import re
+    match = re.search(r"```\s*\n(category:.*?)```", report, re.DOTALL)
+    if not match:
+        return None
+    metadata = {}
+    for line in match.group(1).strip().splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            metadata[key.strip()] = value.strip()
+    return metadata
 
 
 # ---------------------------------------------------------------------------

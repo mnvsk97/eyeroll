@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 
 SUPPORTED_VIDEO_EXTS = {
@@ -150,10 +151,31 @@ def _download_url(url: str, output_dir: str | None = None) -> dict:
     }
 
 
+def _normalize_whitespace(s: str) -> str:
+    """Collapse all Unicode whitespace characters to regular spaces."""
+    import re
+    return re.sub(r'\s', ' ', s)
+
+
 def _resolve_local(path: str) -> dict:
     abs_path = str(Path(path).expanduser().resolve())
     if not os.path.isfile(abs_path):
-        raise FileNotFoundError(f"File not found: {abs_path}")
+        # macOS uses Unicode narrow no-break spaces (U+202F) in screenshot
+        # filenames. Scan the parent directory and match with normalized
+        # whitespace so "Screenshot ... PM.png" resolves regardless of
+        # which whitespace variant the user typed.
+        parent = os.path.dirname(abs_path)
+        name = os.path.basename(abs_path)
+        if os.path.isdir(parent):
+            target = _normalize_whitespace(name)
+            for entry in os.listdir(parent):
+                if _normalize_whitespace(entry) == target:
+                    abs_path = os.path.join(parent, entry)
+                    break
+            else:
+                raise FileNotFoundError(f"File not found: {abs_path}")
+        else:
+            raise FileNotFoundError(f"File not found: {abs_path}")
 
     return {
         "file_path": abs_path,

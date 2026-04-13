@@ -71,8 +71,24 @@ Then synthesize into structured, actionable notes. Output EXACTLY this format:
 
 ## Video Analysis
 
+### Metadata
+```
+category: [bug | feature | other]
+confidence: [high | medium | low]
+scope: [in-context | out-of-context]
+severity: [critical | moderate | low]
+actionable: [yes | no]
+```
+
+Rules for metadata:
+- **category**: "bug" for bug reports, "feature" for feature demos/requests/tutorials, "other" for everything else
+- **confidence**: how confident you are in your analysis
+- **scope**: "in-context" if the video relates to the codebase described in the codebase context section, "out-of-context" if unrelated or no codebase context provided
+- **severity**: "critical" for crashes/data loss/security issues, "moderate" for broken features/errors, "low" for cosmetic/minor issues. For non-bugs, base on importance.
+- **actionable**: "yes" if a coding agent can take concrete action (fix a bug, build a feature, create a skill), "no" if it's just informational
+
 ### Content Type: [bug report | feature demo | tutorial | feature request | code review | general notes]
-State what kind of content this is and your confidence level.
+State what kind of content this is.
 
 ### Summary
 One or two sentences describing what this video shows.
@@ -108,6 +124,14 @@ State your confidence and explain what's clear vs ambiguous.
 <!-- Adapt this section based on content type -->
 
 **If bug report:**
+
+### Reproduction Steps
+Distill the minimal steps to reproduce this bug from the video:
+1. Step one
+2. Step two
+3. ...
+(Only include this section for bugs. Keep it minimal — just enough to trigger the issue.)
+
 - What is the expected behavior vs. the actual behavior?
 - What triggers the issue?
 - Categorize evidence:

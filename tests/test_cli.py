@@ -164,9 +164,10 @@ def test_init_gemini(runner, tmp_path):
     mock_genai.Client.return_value = mock_client
 
     with patch("eyeroll.cli._ENV_PATH", env_path), \
-         patch.dict("sys.modules", {"google": MagicMock(), "google.genai": mock_genai}):
-        # Choose 1 (gemini), then enter API key
-        result = runner.invoke(cli, ["init"], input="1\ntest-api-key-123\n")
+         patch.dict("sys.modules", {"google": MagicMock(), "google.genai": mock_genai}), \
+         patch.dict(os.environ, {"GEMINI_API_KEY": "", "GOOGLE_APPLICATION_CREDENTIALS": ""}, clear=False):
+        # Choose gemini, confirm overwrite (if creds exist), choose API key, enter key
+        result = runner.invoke(cli, ["init"], input="1\ny\n1\ntest-api-key-123\n")
 
     assert result.exit_code == 0
     assert "Setup complete" in result.output

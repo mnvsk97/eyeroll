@@ -15,7 +15,7 @@ eyeroll --help
 If not found, ask the user which backend they want:
 
 Use `AskUserQuestion` with these options:
-- `Gemini (Recommended)` — Google Gemini Flash API, best quality, requires API key
+- `Gemini (Recommended)` — Google Gemini Flash API, best quality, requires API key or credentials.json
 - `OpenAI` — GPT-4o, requires API key
 - `Ollama` — Local models, private, no API key needed
 

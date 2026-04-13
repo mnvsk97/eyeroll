@@ -112,6 +112,7 @@ class GeminiBackend(Backend):
             # Check common locations
             for candidate in [
                 os.path.join(os.path.expanduser("~"), ".eyeroll", "credentials.json"),
+                os.path.join(os.path.expanduser("~"), "credentials.json"),
                 "credentials.json",
             ]:
                 if os.path.isfile(candidate):

@@ -9,6 +9,25 @@ import pytest
 from eyeroll.watch import watch, _wrap_report, _cache_key, _cache_save, _cache_load
 
 
+def _make_mock_backend(supports_video=False, supports_audio=False, supports_batch_frames=False):
+    """Create a mock backend with preflight capabilities."""
+    backend = MagicMock()
+    backend.supports_video = supports_video
+    backend.supports_audio = supports_audio
+    backend.supports_batch_frames = supports_batch_frames
+    backend.preflight.return_value = {
+        "healthy": True,
+        "error": None,
+        "capabilities": {
+            "video_upload": supports_video,
+            "batch_frames": supports_batch_frames,
+            "audio": supports_audio,
+            "max_video_mb": 2000 if supports_video else None,
+        },
+    }
+    return backend
+
+
 # ---------------------------------------------------------------------------
 # _wrap_report — pure string formatting
 # ---------------------------------------------------------------------------
@@ -33,9 +52,7 @@ def test_wrap_report_with_context():
 # ---------------------------------------------------------------------------
 
 def test_watch_local_image(tmp_image_path):
-    mock_backend = MagicMock()
-    mock_backend.supports_video = True
-    mock_backend.supports_audio = True
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
     mock_backend.analyze_image.return_value = "Image frame analysis"
     mock_backend.generate.return_value = "## Synthesized report"
 
@@ -63,9 +80,7 @@ def test_watch_local_image(tmp_image_path):
 
 def test_watch_video_direct_upload(tmp_video_path):
     """Small video + backend supports video => direct upload."""
-    mock_backend = MagicMock()
-    mock_backend.supports_video = True
-    mock_backend.supports_audio = True
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
 
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
@@ -96,9 +111,7 @@ def test_watch_video_direct_upload(tmp_video_path):
 
 def test_watch_video_frame_by_frame(tmp_video_path):
     """Backend does NOT support video => frame-by-frame."""
-    mock_backend = MagicMock()
-    mock_backend.supports_video = False
-    mock_backend.supports_audio = False
+    mock_backend = _make_mock_backend(supports_video=False, supports_audio=False)
 
 
     frames = [
@@ -136,11 +149,8 @@ def test_watch_video_frame_by_frame(tmp_video_path):
 # ---------------------------------------------------------------------------
 
 def test_watch_large_video_fallback(tmp_video_path):
-    """Large video (>20MB) falls back to frame-by-frame even with gemini."""
-    mock_backend = MagicMock()
-    mock_backend.supports_video = True
-    mock_backend.supports_audio = True
-
+    """Video exceeding 2GB falls back to frame-by-frame even with gemini."""
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
 
     frames = [
         {"frame_path": "/tmp/f0.jpg", "timestamp": 0.0, "frame_index": 0},
@@ -157,7 +167,7 @@ def test_watch_large_video_fallback(tmp_video_path):
              "title": "test_video",
          }), \
          patch("eyeroll.watch.get_video_duration", return_value=60.0), \
-         patch("eyeroll.watch.os.path.getsize", return_value=25 * 1024 * 1024), \
+         patch("eyeroll.watch.os.path.getsize", return_value=2500 * 1024 * 1024), \
          patch("eyeroll.watch.extract_key_frames", return_value=frames) as mock_ekf, \
          patch("eyeroll.watch.analyze_frames", return_value=[
              {"frame_index": 0, "timestamp": 0.0, "analysis": "frame"}
@@ -168,16 +178,13 @@ def test_watch_large_video_fallback(tmp_video_path):
          patch("eyeroll.watch.shutil.rmtree"):
         result = watch(tmp_video_path)
 
-    # Should use frame-by-frame since file is > 20MB
+    # Should use frame-by-frame since file is > 2GB
     mock_ekf.assert_called_once()
 
 
 def test_watch_long_video_fallback(tmp_video_path):
-    """Long video (>120s) falls back to frame-by-frame even with gemini."""
-    mock_backend = MagicMock()
-    mock_backend.supports_video = True
-    mock_backend.supports_audio = True
-
+    """Video exceeding 3600s falls back to frame-by-frame even with gemini."""
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
 
     frames = [
         {"frame_path": "/tmp/f0.jpg", "timestamp": 0.0, "frame_index": 0},
@@ -193,7 +200,7 @@ def test_watch_long_video_fallback(tmp_video_path):
              "source_url": None,
              "title": "test_video",
          }), \
-         patch("eyeroll.watch.get_video_duration", return_value=180.0), \
+         patch("eyeroll.watch.get_video_duration", return_value=4000.0), \
          patch("eyeroll.watch.os.path.getsize", return_value=10 * 1024 * 1024), \
          patch("eyeroll.watch.extract_key_frames", return_value=frames) as mock_ekf, \
          patch("eyeroll.watch.analyze_frames", return_value=[
@@ -201,7 +208,7 @@ def test_watch_long_video_fallback(tmp_video_path):
          ]), \
          patch("eyeroll.watch.has_audio_track", return_value=False), \
          patch("eyeroll.watch.synthesize_report", return_value="## Report"), \
-         patch("eyeroll.watch.fmt_timestamp", return_value="03:00"), \
+         patch("eyeroll.watch.fmt_timestamp", return_value="01:06:40"), \
          patch("eyeroll.watch.shutil.rmtree"):
         result = watch(tmp_video_path)
 
@@ -218,9 +225,7 @@ def test_watch_cleans_up_url_download(tmp_path):
     tmp_video.parent.mkdir(parents=True)
     tmp_video.write_bytes(b"\x00" * 1024)
 
-    mock_backend = MagicMock()
-    mock_backend.supports_video = False
-    mock_backend.supports_audio = False
+    mock_backend = _make_mock_backend(supports_video=False, supports_audio=False)
 
 
     frames = [{"frame_path": "/tmp/f0.jpg", "timestamp": 0.0, "frame_index": 0}]
@@ -257,9 +262,7 @@ def test_watch_cleans_up_url_download(tmp_path):
 
 def test_watch_passes_codebase_context(tmp_image_path):
     """watch() passes codebase_context to synthesize_report."""
-    mock_backend = MagicMock()
-    mock_backend.supports_video = True
-    mock_backend.supports_audio = True
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
@@ -276,9 +279,7 @@ def test_watch_passes_codebase_context(tmp_image_path):
 
 def test_watch_works_without_codebase_context(tmp_image_path):
     """watch() works fine when no codebase context is provided."""
-    mock_backend = MagicMock()
-    mock_backend.supports_video = True
-    mock_backend.supports_audio = True
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
@@ -344,9 +345,7 @@ def test_cache_load_miss(tmp_path):
 
 def test_watch_returns_cached_report(tmp_image_path):
     """When cache hits, watch re-runs synthesis but skips analysis."""
-    mock_backend = MagicMock()
-    mock_backend.supports_video = True
-    mock_backend.supports_audio = True
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
 
     cached_intermediates = {
         "title": "test_image",
@@ -378,9 +377,7 @@ def test_watch_returns_cached_report(tmp_image_path):
 
 def test_watch_cache_different_context_different_reports(tmp_image_path):
     """Same cached video with different --context produces different reports."""
-    mock_backend = MagicMock()
-    mock_backend.supports_video = True
-    mock_backend.supports_audio = True
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
 
     cached_intermediates = {
         "title": "test_image",
@@ -414,9 +411,7 @@ def test_watch_cache_different_context_different_reports(tmp_image_path):
 
 def test_watch_no_cache_flag_skips_cache(tmp_image_path):
     """--no-cache forces fresh analysis even if cache exists."""
-    mock_backend = MagicMock()
-    mock_backend.supports_video = True
-    mock_backend.supports_audio = True
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \

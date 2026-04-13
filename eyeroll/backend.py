@@ -65,6 +65,43 @@ class Backend(ABC):
         """Whether this backend can process audio files directly."""
         ...
 
+    @property
+    def supports_batch_frames(self) -> bool:
+        """Whether this backend can analyze multiple frames in one API call."""
+        return False
+
+    def analyze_frames_batch(
+        self, frame_paths: list[tuple[str, float]], prompt: str, verbose: bool = False,
+    ) -> str:
+        """Analyze multiple frames in a single API call.
+
+        Args:
+            frame_paths: List of (file_path, timestamp_seconds) tuples.
+            prompt: Text prompt for the analysis.
+
+        Returns text response combining all frame observations.
+        """
+        raise NotImplementedError("This backend does not support batch frame analysis.")
+
+    def preflight(self) -> dict:
+        """Check backend health and report capabilities.
+
+        Returns dict with:
+            healthy: bool
+            error: str or None
+            capabilities: {video_upload, batch_frames, audio, max_video_mb}
+        """
+        return {
+            "healthy": True,
+            "error": None,
+            "capabilities": {
+                "video_upload": self.supports_video,
+                "batch_frames": self.supports_batch_frames,
+                "audio": self.supports_audio,
+                "max_video_mb": None,
+            },
+        }
+
 
 # ---------------------------------------------------------------------------
 # Gemini Backend
@@ -159,16 +196,22 @@ class GeminiBackend(Backend):
 
     def analyze_video(self, video_path: str, prompt: str, verbose: bool = False) -> str:
         from google.genai import types
-        with open(video_path, "rb") as f:
-            video_bytes = f.read()
-        response = self._client.models.generate_content(
-            model=self._model,
-            contents=types.Content(role="user", parts=[
-                types.Part.from_bytes(data=video_bytes, mime_type="video/mp4"),
-                types.Part(text=prompt),
-            ]),
-        )
-        return response.text
+        # Upload via File API (supports up to 2GB, resumable)
+        file_obj = self._client.files.upload(file=video_path)
+        try:
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=types.Content(role="user", parts=[
+                    types.Part.from_uri(file_uri=file_obj.uri, mime_type=file_obj.mime_type or "video/mp4"),
+                    types.Part(text=prompt),
+                ]),
+            )
+            return response.text
+        finally:
+            try:
+                self._client.files.delete(name=file_obj.name)
+            except Exception:
+                pass
 
     def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
         from google.genai import types
@@ -197,6 +240,24 @@ class GeminiBackend(Backend):
     @property
     def supports_audio(self) -> bool:
         return True
+
+    def preflight(self) -> dict:
+        try:
+            self._client.models.get(model=self._model)
+            return {
+                "healthy": True,
+                "error": None,
+                "capabilities": {
+                    "video_upload": True,
+                    "batch_frames": False,
+                    "audio": True,
+                    "max_video_mb": 2000,
+                },
+            }
+        except Exception as e:
+            return {"healthy": False, "error": str(e), "capabilities": {
+                "video_upload": False, "batch_frames": False, "audio": False, "max_video_mb": None,
+            }}
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +358,47 @@ class OpenAIBackend(Backend):
     @property
     def supports_audio(self) -> bool:
         return self._has_whisper
+
+    @property
+    def supports_batch_frames(self) -> bool:
+        return True
+
+    def analyze_frames_batch(
+        self, frame_paths: list[tuple[str, float]], prompt: str, verbose: bool = False,
+    ) -> str:
+        content = []
+        for i, (path, timestamp) in enumerate(frame_paths):
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+            ext = os.path.splitext(path)[1].lower()
+            mime_type = IMAGE_MIME_TYPES.get(ext, "image/jpeg")
+            content.append({"type": "text", "text": f"[Frame {i} @ {timestamp:.1f}s]"})
+            content.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64}"}})
+        content.append({"type": "text", "text": prompt})
+
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": content}],
+        )
+        return response.choices[0].message.content
+
+    def preflight(self) -> dict:
+        try:
+            self._client.models.list()
+            return {
+                "healthy": True,
+                "error": None,
+                "capabilities": {
+                    "video_upload": False,
+                    "batch_frames": True,
+                    "audio": self._has_whisper,
+                    "max_video_mb": None,
+                },
+            }
+        except Exception as e:
+            return {"healthy": False, "error": str(e), "capabilities": {
+                "video_upload": False, "batch_frames": False, "audio": False, "max_video_mb": None,
+            }}
 
 
 # ---------------------------------------------------------------------------
@@ -468,6 +570,28 @@ class OllamaBackend(Backend):
     @property
     def supports_audio(self) -> bool:
         return False
+
+    def preflight(self) -> dict:
+        import urllib.request
+        import urllib.error
+        try:
+            req = urllib.request.Request(f"{self._host}/api/tags")
+            with urllib.request.urlopen(req, timeout=5):
+                pass
+            return {
+                "healthy": True,
+                "error": None,
+                "capabilities": {
+                    "video_upload": False,
+                    "batch_frames": False,
+                    "audio": False,
+                    "max_video_mb": None,
+                },
+            }
+        except Exception as e:
+            return {"healthy": False, "error": str(e), "capabilities": {
+                "video_upload": False, "batch_frames": False, "audio": False, "max_video_mb": None,
+            }}
 
 
 # ---------------------------------------------------------------------------

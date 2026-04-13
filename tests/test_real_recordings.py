@@ -9,6 +9,21 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+
+def _mock_backend(supports_video=False, supports_audio=False):
+    backend = MagicMock()
+    backend.supports_video = supports_video
+    backend.supports_audio = supports_audio
+    backend.supports_batch_frames = False
+    backend.preflight.return_value = {
+        "healthy": True, "error": None,
+        "capabilities": {
+            "video_upload": supports_video, "batch_frames": False,
+            "audio": supports_audio, "max_video_mb": 2000 if supports_video else None,
+        },
+    }
+    return backend
+
 from eyeroll.acquire import acquire, detect_media_type
 from eyeroll.extract import (
     extract_audio,
@@ -86,9 +101,7 @@ MOCK_SYNTHESIS = "## Video Analysis\n\n### Summary\nBug recording showing 401 er
 class TestBugRecordingPipeline:
     def test_mov_full_pipeline(self, bug_recording_mov, tmp_path, monkeypatch):
         monkeypatch.setattr("eyeroll.watch.CACHE_DIR", str(tmp_path / "cache"))
-        backend = MagicMock()
-        backend.supports_video = False
-        backend.supports_audio = False
+        backend = _mock_backend(supports_video=False, supports_audio=False)
         with patch("eyeroll.watch.get_backend", return_value=backend), \
              patch("eyeroll.watch.reset_backend"), \
              patch("eyeroll.watch.analyze_frames", return_value=[
@@ -107,9 +120,7 @@ class TestBugRecordingPipeline:
 
     def test_mp4_full_pipeline(self, bug_recording_mp4, tmp_path, monkeypatch):
         monkeypatch.setattr("eyeroll.watch.CACHE_DIR", str(tmp_path / "cache"))
-        backend = MagicMock()
-        backend.supports_video = False
-        backend.supports_audio = False
+        backend = _mock_backend(supports_video=False, supports_audio=False)
         with patch("eyeroll.watch.get_backend", return_value=backend), \
              patch("eyeroll.watch.reset_backend"), \
              patch("eyeroll.watch.analyze_frames", return_value=[
@@ -122,9 +133,7 @@ class TestBugRecordingPipeline:
     def test_mov_with_direct_upload_backend(self, bug_recording_mov, tmp_path, monkeypatch):
         """31s video < 120s and < 20MB — should use direct upload if supported."""
         monkeypatch.setattr("eyeroll.watch.CACHE_DIR", str(tmp_path / "cache"))
-        backend = MagicMock()
-        backend.supports_video = True
-        backend.supports_audio = False
+        backend = _mock_backend(supports_video=True, supports_audio=False)
         with patch("eyeroll.watch.get_backend", return_value=backend), \
              patch("eyeroll.watch.reset_backend"), \
              patch("eyeroll.watch.analyze_video_direct", return_value="Direct analysis") as mock_avd, \

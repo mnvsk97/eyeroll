@@ -32,10 +32,21 @@ def disable_cache(tmp_path, monkeypatch):
     monkeypatch.setattr("eyeroll.watch.CACHE_DIR", str(tmp_path / "cache"))
 
 
-def _mock_backend(supports_video=False, supports_audio=False):
+def _mock_backend(supports_video=False, supports_audio=False, supports_batch_frames=False):
     backend = MagicMock()
     backend.supports_video = supports_video
     backend.supports_audio = supports_audio
+    backend.supports_batch_frames = supports_batch_frames
+    backend.preflight.return_value = {
+        "healthy": True,
+        "error": None,
+        "capabilities": {
+            "video_upload": supports_video,
+            "batch_frames": supports_batch_frames,
+            "audio": supports_audio,
+            "max_video_mb": 2000 if supports_video else None,
+        },
+    }
     return backend
 
 
@@ -106,20 +117,18 @@ class TestPipelineVideoDirectUpload:
         mock_avd.assert_called_once()
         mock_af.assert_not_called()
 
-    def test_long_video_falls_back_to_frames(self, long_video):
-        """150s video exceeds MAX_DIRECT_UPLOAD_SECONDS, should use frame-by-frame."""
+    def test_long_video_uses_direct_upload(self, long_video):
+        """150s video is within the 3600s limit, should use direct upload."""
         backend = _mock_backend(supports_video=True, supports_audio=False)
         with patch("eyeroll.watch.get_backend", return_value=backend), \
              patch("eyeroll.watch.reset_backend"), \
-             patch("eyeroll.watch.analyze_video_direct") as mock_avd, \
-             patch("eyeroll.watch.analyze_frames", return_value=[
-                 {"frame_index": 0, "timestamp": 0.0, "analysis": MOCK_FRAME_ANALYSIS}
-             ]) as mock_af, \
+             patch("eyeroll.watch.analyze_video_direct", return_value=MOCK_VIDEO_ANALYSIS) as mock_avd, \
+             patch("eyeroll.watch.analyze_frames") as mock_af, \
              patch("eyeroll.watch.synthesize_report", return_value=MOCK_SYNTHESIS):
             report = watch(long_video, no_cache=True)
         assert "eyeroll:" in report
-        mock_avd.assert_not_called()
-        mock_af.assert_called_once()
+        mock_avd.assert_called_once()
+        mock_af.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

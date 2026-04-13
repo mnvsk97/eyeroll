@@ -34,6 +34,19 @@ Watch the entire video carefully and describe:
 
 Be precise. Quote exact text. Don't guess what you can't see clearly."""
 
+BATCH_FRAMES_PROMPT = """You are analyzing a screen recording. The frames below are key moments extracted from the video, shown in chronological order with timestamps.
+
+For each frame, extract:
+1. **PAGE/URL**: What page, URL, or route is visible?
+2. **UI STATE**: What UI elements are visible?
+3. **TEXT ON SCREEN**: All significant text — error messages, labels, code, URLs. Quote exact wording.
+4. **ERRORS/WARNINGS**: Any error messages, red text, warnings?
+5. **USER ACTION**: What the user just did or is about to do
+6. **WHAT'S BEING SHOWN**: What is being demonstrated
+
+Then provide an overall narrative of what happens across all frames.
+Be precise. Quote exact text. If you can't read something clearly, say so."""
+
 AUDIO_PROMPT = (
     "Transcribe this audio from a video recording. "
     "Include everything the speaker says. "

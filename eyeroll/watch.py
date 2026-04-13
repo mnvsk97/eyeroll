@@ -23,10 +23,10 @@ from .extract import (
     has_audio_track,
 )
 
-# Max file size for direct video upload (20MB)
-MAX_DIRECT_UPLOAD_MB = 20
-# Max video duration for direct upload (2 minutes)
-MAX_DIRECT_UPLOAD_SECONDS = 120
+# Max file size for direct video upload via Gemini File API (2GB)
+MAX_DIRECT_UPLOAD_MB = 2000
+# Max video duration for direct upload (1 hour)
+MAX_DIRECT_UPLOAD_SECONDS = 3600
 
 
 def watch(
@@ -70,11 +70,19 @@ def watch(
     backend = get_backend(backend_name, **backend_kwargs)
     backend_label = backend_name or os.environ.get("EYEROLL_BACKEND", "gemini")
 
+    # Preflight: verify backend is reachable and discover capabilities
+    from .backend import AnalysisError
+    flight = backend.preflight()
+    if not flight["healthy"]:
+        raise AnalysisError(f"Backend {backend_label} is not reachable: {flight['error']}")
 
     if verbose:
         print(f"Backend: {backend_label}", file=sys.stderr)
         if model:
             print(f"Model: {model}", file=sys.stderr)
+        caps = flight["capabilities"]
+        print(f"  Capabilities: video_upload={caps['video_upload']}, "
+              f"batch_frames={caps['batch_frames']}, audio={caps['audio']}", file=sys.stderr)
         if codebase_context:
             print("  Codebase context provided", file=sys.stderr)
 
@@ -182,31 +190,38 @@ def _analyze_video(
         print(f"  Duration: {fmt_timestamp(duration)}", file=sys.stderr)
         print(f"  Size: {file_size_mb:.1f}MB", file=sys.stderr)
 
-    # Decide strategy: direct upload vs frame-by-frame
-    # Only use direct upload if backend supports it AND video is small enough
-    use_direct = (
-        backend.supports_video
-        and file_size_mb <= MAX_DIRECT_UPLOAD_MB
-        and duration <= MAX_DIRECT_UPLOAD_SECONDS
-    )
+    # Decide strategy based on backend capabilities
+    caps = backend.preflight()["capabilities"]
+    max_mb = caps.get("max_video_mb") or MAX_DIRECT_UPLOAD_MB
+    can_direct = caps["video_upload"] and file_size_mb <= max_mb and duration <= MAX_DIRECT_UPLOAD_SECONDS
+    can_batch = caps["batch_frames"]
 
     video_analysis = None
     frame_analyses = None
 
-    if use_direct:
+    if can_direct:
         if verbose:
             print("  Strategy: direct video upload", file=sys.stderr)
         video_analysis = analyze_video_direct(file_path, duration, verbose=verbose)
+    elif can_batch:
+        if verbose:
+            print("  Strategy: multi-frame batch (single API call)", file=sys.stderr)
+        frames = extract_key_frames(file_path, max_frames=max_frames)
+        if verbose:
+            print(f"  Extracted {len(frames)} key frames", file=sys.stderr)
+        frame_tuples = [(f["frame_path"], f["timestamp"]) for f in frames]
+        from .analyze import BATCH_FRAMES_PROMPT
+        video_analysis = backend.analyze_frames_batch(frame_tuples, BATCH_FRAMES_PROMPT, verbose=verbose)
+        if frames:
+            frame_dir = os.path.dirname(frames[0]["frame_path"])
+            shutil.rmtree(frame_dir, ignore_errors=True)
     else:
         if verbose:
-            reason = "backend doesn't support video" if not backend.supports_video else "video too large"
-            print(f"  Strategy: frame-by-frame ({reason})", file=sys.stderr)
+            print("  Strategy: frame-by-frame", file=sys.stderr)
         frames = extract_key_frames(file_path, max_frames=max_frames)
         if verbose:
             print(f"  Extracted {len(frames)} key frames", file=sys.stderr)
         frame_analyses = analyze_frames(frames, verbose=verbose, parallel=parallel)
-
-        # Clean up frame files
         if frames:
             frame_dir = os.path.dirname(frames[0]["frame_path"])
             shutil.rmtree(frame_dir, ignore_errors=True)

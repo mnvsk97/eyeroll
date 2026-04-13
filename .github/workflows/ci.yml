@@ -127,3 +127,12 @@ jobs:
       - name: Publish to PyPI
         if: steps.check.outputs.exists == 'false'
         uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Update Homebrew formula
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          gh api repos/mnvsk97/homebrew-tap/dispatches \
+            -f event_type=update-eyeroll \
+            -f "client_payload[version]=${{ steps.check.outputs.version }}"

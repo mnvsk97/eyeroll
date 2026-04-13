@@ -91,7 +91,7 @@ jobs:
       - name: Configure yt-dlp to use Node.js runtime
         run: |
           mkdir -p ~/.config/yt-dlp
-          echo "--js-runtimes nodejs" > ~/.config/yt-dlp/config
+          echo "--js-runtimes node" > ~/.config/yt-dlp/config
 
       - name: Smoke test — watch a short YouTube video
         run: eyeroll watch https://www.youtube.com/watch?v=jNQXAC9IVRw --backend openai

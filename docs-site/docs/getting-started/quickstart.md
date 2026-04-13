@@ -77,5 +77,5 @@ Context text helps eyeroll understand what you want. Most screen recordings are 
 ## What's next
 
 - [/eyeroll:fix](../commands/fix.md) -- go from video to PR in one command
-- [Backends](../backends/overview.md) -- compare Gemini, OpenAI, and Ollama
+- [Backends](../backends/overview.md) -- compare all 8 backends
 - [How it works](../how-it-works.md) -- understand the pipeline

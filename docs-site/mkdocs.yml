@@ -57,6 +57,11 @@ nav:
       - Gemini: backends/gemini.md
       - OpenAI: backends/openai.md
       - Ollama: backends/ollama.md
+      - OpenRouter: backends/openrouter.md
+      - Groq: backends/groq.md
+      - Grok: backends/grok.md
+      - Cerebras: backends/cerebras.md
+      - OpenAI-Compatible: backends/openai-compat.md
   - CLI Reference: cli.md
   - How It Works: how-it-works.md
   - Development: development.md

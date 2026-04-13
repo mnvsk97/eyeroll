@@ -32,6 +32,8 @@ pytest tests/test_integration.py -v -m integration
 !!! warning "Integration tests"
     Integration tests hit real APIs and download real videos. They require valid API keys and are skipped by default in CI. Run them manually before releases.
 
+The test suite has 269 unit tests and 8 integration tests.
+
 ## Test patterns
 
 - All API calls, Ollama calls, ffmpeg, and yt-dlp are mocked in unit tests

@@ -32,6 +32,63 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+  install-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Install from wheel in fresh venv
+        run: |
+          python -m venv /tmp/install-check-venv
+          /tmp/install-check-venv/bin/pip install dist/*.whl
+
+      - name: Verify CLI entry point
+        run: /tmp/install-check-venv/bin/eyeroll --help
+
+  smoke-test:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 5
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install eyeroll
+        run: |
+          python -m pip install --upgrade pip
+          pip install '.[openai,dev]'
+
+      - name: Verify CLI is accessible
+        run: eyeroll --help
+
+      - name: Smoke test — watch a short YouTube video
+        run: eyeroll watch https://www.youtube.com/watch?v=jNQXAC9IVRw --backend openai
+
+      - name: Run integration tests
+        run: pytest tests/test_integration.py -v -m integration
+
   publish:
     needs: test
     runs-on: ubuntu-latest

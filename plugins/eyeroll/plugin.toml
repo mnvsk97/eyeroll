@@ -1,0 +1,36 @@
+[plugin]
+name = "eyeroll"
+version = "0.4.2"
+description = "AI eyes that roll through video footage — watch, understand, act"
+author = "mnvsk97"
+repository = "https://github.com/mnvsk97/eyeroll"
+license = "MIT"
+
+[requirements]
+python = ">=3.11"
+packages = ["eyeroll"]
+
+[[commands]]
+name = "init"
+description = "Set up API keys and configure eyeroll backends"
+file = "commands/init.md"
+
+[[commands]]
+name = "watch"
+description = "Analyze a video URL or local file and produce structured notes"
+file = "commands/watch.md"
+
+[[commands]]
+name = "fix"
+description = "Apply fixes based on eyeroll video analysis"
+file = "commands/fix.md"
+
+[[commands]]
+name = "history"
+description = "View past eyeroll analysis reports"
+file = "commands/history.md"
+
+[[skills]]
+name = "video-to-skill"
+description = "Convert a video walkthrough into a reusable Claude Code skill"
+directory = "skills/video-to-skill"

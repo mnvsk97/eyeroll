@@ -17,7 +17,7 @@ The init command does three things:
 The agent will:
 
 - Check if `eyeroll` is installed and install it if not
-- Ask which backend you want (Gemini, OpenAI, or Ollama)
+- Ask which backend you want (Gemini, OpenAI, Ollama, OpenRouter, Groq, Grok, Cerebras, or openai-compat)
 - Run `eyeroll init` for interactive API key setup
 - Explore your codebase and generate `.eyeroll/context.md`
 

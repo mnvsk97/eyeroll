@@ -21,11 +21,13 @@ Install the Python CLI with the backend you want:
     pip install eyeroll[gemini]
     ```
 
-=== "OpenAI"
+=== "OpenAI + compatible providers"
 
     ```bash
     pip install eyeroll[openai]
     ```
+
+    This also covers OpenRouter, Groq, Grok, Cerebras, and openai-compat backends (they all use the `openai` SDK).
 
 === "Ollama (local, no API key)"
 

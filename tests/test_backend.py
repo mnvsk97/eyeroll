@@ -248,7 +248,7 @@ def test_openai_no_api_key():
     env = {k: v for k, v in os.environ.items() if k != "OPENAI_API_KEY"}
     with patch.dict(os.environ, env, clear=True), \
          patch.dict("sys.modules", {"openai": mock_openai_mod}):
-        with pytest.raises(AnalysisError, match="No OpenAI API key found"):
+        with pytest.raises(AnalysisError, match="No API key found"):
             OpenAIBackend()
 
 
@@ -264,7 +264,7 @@ def test_openai_supports_audio():
 
 def test_openai_analyze_video_raises():
     backend = _make_openai()
-    with pytest.raises(AnalysisError, match="does not support direct video"):
+    with pytest.raises(AnalysisError, match="do not support direct video"):
         backend.analyze_video("/path/to/video.mp4", "describe")
 
 

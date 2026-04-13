@@ -4,6 +4,11 @@ Supports:
   - gemini: Google Gemini Flash API (requires GEMINI_API_KEY)
   - openai: OpenAI GPT-4o API (requires OPENAI_API_KEY)
   - ollama: Local Ollama with vision models like qwen3-vl (no API key needed)
+  - openrouter: OpenRouter API (requires OPENROUTER_API_KEY)
+  - groq: Groq API (requires GROQ_API_KEY)
+  - grok: xAI Grok API (requires GROK_API_KEY)
+  - cerebras: Cerebras API (requires CEREBRAS_API_KEY)
+  - openai-compat: Any OpenAI-compatible endpoint (requires base_url + API key)
 """
 
 import base64
@@ -195,31 +200,51 @@ class GeminiBackend(Backend):
 
 
 # ---------------------------------------------------------------------------
-# OpenAI Backend
+# OpenAI Backend (also handles OpenAI-compatible providers)
 # ---------------------------------------------------------------------------
 
-class OpenAIBackend(Backend):
-    """OpenAI GPT-4o API backend."""
+# Maps provider name -> (base_url, api_key_env, default_model, has_whisper)
+# has_whisper=False: the Whisper transcription endpoint only exists on OpenAI proper.
+_OPENAI_COMPAT_PROVIDERS = {
+    "openrouter": ("https://openrouter.ai/api/v1",   "OPENROUTER_API_KEY", "openai/gpt-4o",           False),
+    "groq":       ("https://api.groq.com/openai/v1", "GROQ_API_KEY",       "llama-3.3-70b-versatile", False),
+    "grok":       ("https://api.x.ai/v1",            "GROK_API_KEY",       "grok-2-vision-1212",      False),
+    "cerebras":   ("https://api.cerebras.ai/v1",     "CEREBRAS_API_KEY",   "llama3.1-70b",            False),
+}
 
-    def __init__(self, model: str = "gpt-4o"):
+
+class OpenAIBackend(Backend):
+    """OpenAI GPT-4o API backend.
+
+    Also handles OpenAI-compatible providers (Groq, Grok, OpenRouter, Cerebras) and
+    custom self-hosted endpoints. Use get_backend() to construct for named providers.
+    """
+
+    def __init__(
+        self,
+        model: str = "gpt-4o",
+        base_url: str | None = None,
+        api_key_env: str = "OPENAI_API_KEY",
+        has_whisper: bool = True,
+    ):
         try:
             from openai import OpenAI
         except ImportError:
             raise ImportError(
                 "OpenAI backend requires openai. Install with: pip install eyeroll[openai]"
             )
-        api_key = os.environ.get("OPENAI_API_KEY")
+        # Try the provider-specific env var first, then fall back to OPENAI_API_KEY
+        api_key = os.environ.get(api_key_env) or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise AnalysisError(
-                "No OpenAI API key found.\n\n"
-                "Get a key at: https://platform.openai.com/api-keys\n"
-                "Then: export OPENAI_API_KEY=your-key\n\n"
+                f"No API key found. Set {api_key_env} and try again.\n\n"
                 "Or use a different backend:\n"
                 "  eyeroll watch <source> --backend gemini\n"
                 "  eyeroll watch <source> --backend ollama"
             )
-        self._client = OpenAI(api_key=api_key)
+        self._client = OpenAI(api_key=api_key, base_url=base_url)
         self._model = model
+        self._has_whisper = has_whisper  # only OpenAI's endpoint has Whisper
 
     def analyze_image(self, image_path: str, prompt: str, verbose: bool = False) -> str:
         with open(image_path, "rb") as f:
@@ -241,11 +266,16 @@ class OpenAIBackend(Backend):
 
     def analyze_video(self, video_path: str, prompt: str, verbose: bool = False) -> str:
         raise AnalysisError(
-            "OpenAI does not support direct video upload. "
+            "OpenAI-compatible backends do not support direct video upload. "
             "Use frame-by-frame mode instead."
         )
 
     def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+        if not self._has_whisper:
+            raise AnalysisError(
+                f"Audio transcription is not supported for this provider. "
+                "Only the OpenAI backend has the Whisper endpoint."
+            )
         with open(audio_path, "rb") as f:
             transcript = self._client.audio.transcriptions.create(
                 model="whisper-1",
@@ -266,7 +296,7 @@ class OpenAIBackend(Backend):
 
     @property
     def supports_audio(self) -> bool:
-        return True
+        return self._has_whisper
 
 
 # ---------------------------------------------------------------------------
@@ -451,8 +481,10 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
     """Get or create the active backend.
 
     Args:
-        name: 'gemini', 'openai', or 'ollama'. Defaults to EYEROLL_BACKEND env var, then 'gemini'.
-        **kwargs: passed to backend constructor (e.g., model, host).
+        name: Backend name. One of: 'gemini', 'openai', 'ollama', 'openrouter', 'groq',
+              'grok', 'cerebras', 'openai-compat'.
+              Defaults to EYEROLL_BACKEND env var, then 'gemini'.
+        **kwargs: Passed to backend constructor (e.g., model, host, base_url).
     """
     global _current_backend
     if _current_backend is not None:
@@ -467,8 +499,23 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
         _current_backend = OpenAIBackend(**kwargs)
     elif name == "ollama":
         _current_backend = OllamaBackend(**kwargs)
+    elif name in _OPENAI_COMPAT_PROVIDERS:
+        url, key_env, default_model, has_whisper = _OPENAI_COMPAT_PROVIDERS[name]
+        _current_backend = OpenAIBackend(
+            model=kwargs.get("model", default_model),
+            base_url=url,
+            api_key_env=key_env,
+            has_whisper=has_whisper,
+        )
+    elif name == "openai-compat":
+        # Requires base_url in kwargs; model is optional
+        _current_backend = OpenAIBackend(has_whisper=False, **kwargs)
     else:
-        raise ValueError(f"Unknown backend: {name}. Use 'gemini', 'openai', or 'ollama'.")
+        raise ValueError(
+            f"Unknown backend: {name}. "
+            "Use 'gemini', 'openai', 'ollama', 'openrouter', 'groq', 'grok', "
+            "'cerebras', or 'openai-compat'."
+        )
 
     return _current_backend
 

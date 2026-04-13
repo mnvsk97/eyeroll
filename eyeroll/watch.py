@@ -36,6 +36,7 @@ def watch(
     max_frames: int = 20,
     backend_name: str | None = None,
     model: str | None = None,
+    base_url: str | None = None,
     verbose: bool = False,
     no_cache: bool = False,
     parallel: int = 1,
@@ -47,8 +48,10 @@ def watch(
         context: Optional text context (Slack message, issue body, etc.)
         codebase_context: Optional codebase context (project structure, stack, key files).
         max_frames: Maximum number of key frames to extract and analyze.
-        backend_name: 'gemini', 'openai', or 'ollama'. Defaults to EYEROLL_BACKEND env var, then 'gemini'.
+        backend_name: Backend name (e.g. 'gemini', 'openai', 'groq', 'openai-compat').
+                      Defaults to EYEROLL_BACKEND env var, then 'gemini'.
         model: Model override (e.g., 'qwen3-vl:8b' for ollama, 'gemini-2.0-flash' for gemini).
+        base_url: Base URL for openai-compat backend (e.g. https://my-server/v1).
         verbose: Print progress to stderr.
         no_cache: Skip cache lookup and force fresh analysis.
         parallel: Number of concurrent workers for frame analysis (default: 1 = sequential).
@@ -60,6 +63,8 @@ def watch(
     backend_kwargs = {}
     if model:
         backend_kwargs["model"] = model
+    if base_url:
+        backend_kwargs["base_url"] = base_url
 
     # Initialize backend early to fail fast on config errors
     backend = get_backend(backend_name, **backend_kwargs)

@@ -497,7 +497,6 @@ class OllamaBackend(Backend):
         """Pull the model if not already available."""
         import json
         import urllib.request
-        import urllib.error
 
         req = urllib.request.Request(f"{self._host}/api/tags")
         with urllib.request.urlopen(req) as resp:
@@ -589,7 +588,6 @@ class OllamaBackend(Backend):
 
     def preflight(self) -> dict:
         import urllib.request
-        import urllib.error
         try:
             req = urllib.request.Request(f"{self._host}/api/tags")
             with urllib.request.urlopen(req, timeout=5):

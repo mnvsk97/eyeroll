@@ -5,7 +5,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import unicodedata
 from pathlib import Path
 
 SUPPORTED_VIDEO_EXTS = {

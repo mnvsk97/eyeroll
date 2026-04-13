@@ -7,7 +7,6 @@ import re
 import shutil
 import subprocess
 import tempfile
-from pathlib import Path
 
 
 @functools.lru_cache(maxsize=1)

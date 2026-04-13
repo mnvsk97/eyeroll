@@ -120,9 +120,11 @@ class GeminiBackend(Backend):
         api_key = os.environ.get("GEMINI_API_KEY")
         credentials, project = self._load_service_account()
 
+        self._is_vertex = False
         if api_key:
             self._client = genai.Client(api_key=api_key)
         elif credentials:
+            self._is_vertex = True
             self._client = genai.Client(
                 vertexai=True,
                 credentials=credentials,
@@ -196,7 +198,19 @@ class GeminiBackend(Backend):
 
     def analyze_video(self, video_path: str, prompt: str, verbose: bool = False) -> str:
         from google.genai import types
-        # Upload via File API (supports up to 2GB, resumable)
+        if self._is_vertex:
+            # Vertex AI: inline bytes (File API not supported)
+            with open(video_path, "rb") as f:
+                video_bytes = f.read()
+            response = self._client.models.generate_content(
+                model=self._model,
+                contents=types.Content(role="user", parts=[
+                    types.Part.from_bytes(data=video_bytes, mime_type="video/mp4"),
+                    types.Part(text=prompt),
+                ]),
+            )
+            return response.text
+        # Developer API: upload via File API (supports up to 2GB)
         file_obj = self._client.files.upload(file=video_path)
         try:
             response = self._client.models.generate_content(
@@ -244,6 +258,8 @@ class GeminiBackend(Backend):
     def preflight(self) -> dict:
         try:
             self._client.models.get(model=self._model)
+            # File API (2GB) only on Developer API; Vertex AI uses inline bytes (20MB)
+            max_mb = 20 if self._is_vertex else 2000
             return {
                 "healthy": True,
                 "error": None,
@@ -251,7 +267,7 @@ class GeminiBackend(Backend):
                     "video_upload": True,
                     "batch_frames": False,
                     "audio": True,
-                    "max_video_mb": 2000,
+                    "max_video_mb": max_mb,
                 },
             }
         except Exception as e:

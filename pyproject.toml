@@ -8,7 +8,12 @@ authors = [
     { name = "mnvsk97", email = "mnvsk97@gmail.com" },
 ]
 readme = "README.md"
-keywords = ["video", "ai", "agent", "skills", "bug-report", "gemini", "openai", "ollama", "screenshot", "claude-code"]
+keywords = [
+    "video", "video-analysis", "ai", "agent", "skills", "bug-report",
+    "gemini", "openai", "ollama", "screenshot", "claude-code",
+    "screen-recording", "loom", "youtube", "developer-tools",
+    "code-review", "multimodal", "vision", "llm", "automation",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -18,7 +23,12 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Bug Tracking",
+    "Topic :: Software Development :: Quality Assurance",
     "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Environment :: Console",
+    "Environment :: Plugins",
+    "Typing :: Typed",
 ]
 dependencies = [
     "click>=8.1",

@@ -48,37 +48,53 @@ A typical 30-second to 2-minute video produces 8-15 meaningful frames.
 
 If the backend supports audio and the video has an audio track (detected via ffprobe), the audio is extracted as MP3 using ffmpeg. Silent or near-empty audio files are discarded.
 
+## Preflight check
+
+Before any analysis, eyeroll runs a preflight check that:
+
+1. Verifies the backend is reachable (API key valid, server running)
+2. Detects capabilities (video upload, batch frames, audio transcription, max video size)
+
+If the backend is not reachable, eyeroll fails fast with a clear error before wasting time on frame extraction.
+
 ## Analysis strategy
 
-The orchestrator (`watch.py`) chooses the analysis strategy based on backend capabilities and video properties:
+The orchestrator (`watch.py`) uses preflight capabilities to choose the best strategy:
 
 ### Direct video upload
 
-Used when all conditions are met:
+Used when:
 
-- Backend supports video (Gemini only)
-- Video is under 20MB
-- Video is under 2 minutes
+- Backend supports video upload (Gemini only)
+- Video is within size limits (2GB for Gemini API key, 20MB for Vertex AI service account)
+- Video is under 1 hour
 
-The full video is sent in one API call. The model sees motion, transitions, and timing.
+Gemini API key users get the File API, which handles resumable uploads up to 2GB. The model sees motion, transitions, and timing.
+
+### Multi-frame batch
+
+Used when:
+
+- Backend supports batch frame analysis (OpenAI, OpenRouter, Groq, Grok, Cerebras, openai-compat)
+- Video exceeds direct upload limits
+
+All extracted frames are sent as images in a single API call, with timestamps per frame. The model sees all frames at once with temporal context. One API call instead of N.
 
 ### Frame-by-frame
 
-Used in all other cases. Each extracted frame is analyzed individually with a structured prompt that asks for:
+Used when:
 
-- Page/URL visible
-- UI state and elements
-- Exact text on screen
-- Error messages and warnings
-- User actions
-- What is being demonstrated
+- Backend does not support batch frames (Ollama)
+- Fallback for any other case
+
+Each extracted frame is analyzed individually with a structured prompt that asks for page/URL, UI state, exact text on screen, error messages, user actions, and what is being demonstrated.
 
 ### Parallel analysis
 
-Frame analysis runs in parallel by default for API backends:
+Frame-by-frame analysis runs in parallel by default:
 
-- **Gemini / OpenAI**: 3 concurrent workers (requests go to separate servers)
-- **Ollama**: 1 worker (single GPU, concurrency adds overhead)
+- **API backends**: 3 concurrent workers
+- **Ollama**: 1 worker (single GPU)
 
 Override with the `--parallel` flag:
 

@@ -26,7 +26,10 @@ export GOOGLE_CLOUD_LOCATION=us-central1   # optional, defaults to us-central1
 eyeroll also checks these paths automatically:
 
 - `~/.eyeroll/credentials.json`
+- `~/credentials.json`
 - `./credentials.json`
+
+You can also configure this via `eyeroll init` -- it will ask whether you want to use an API key or a credentials.json file.
 
 Service account auth uses Vertex AI under the hood.
 
@@ -34,10 +37,11 @@ Service account auth uses Vertex AI under the hood.
 
 | Feature | Supported |
 |---|---|
-| Direct video upload | Yes (under 2 min / 20MB) |
-| Frame-by-frame analysis | Yes (fallback for large videos) |
+| Direct video upload | Yes -- File API up to 2GB (API key) or 20MB inline (service account) |
+| Frame-by-frame analysis | Yes (fallback for videos exceeding limits) |
 | Audio transcription | Yes (native) |
 | Text generation | Yes |
+| Preflight health check | Yes (verifies model access) |
 
 ## Model
 
@@ -51,9 +55,11 @@ eyeroll watch video.mp4 --model gemini-2.0-flash
 
 ## Direct video upload
 
-For short videos (under 2 minutes, under 20MB), Gemini receives the full video in a single API call. This produces better results than frame-by-frame because the model sees motion, transitions, and timing.
+With an **API key**, eyeroll uses the Gemini File API to upload videos up to 2GB. The model receives the full video in a single request, producing better results than frame-by-frame because it sees motion, transitions, and timing.
 
-For longer or larger videos, eyeroll falls back to frame-by-frame analysis automatically.
+With a **service account** (Vertex AI), videos are sent as inline bytes with a 20MB limit. Videos exceeding this fall back to frame-by-frame automatically.
+
+For videos exceeding either limit, eyeroll falls back to frame-by-frame analysis.
 
 ## Cost
 

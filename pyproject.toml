@@ -1,6 +1,6 @@
 [project]
 name = "eyeroll"
-version = "0.4.1"
+version = "0.4.2"
 description = "AI eyes that roll through video footage — watch, understand, turn into code actions."
 requires-python = ">=3.11"
 license = {text = "MIT"}

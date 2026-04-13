@@ -76,21 +76,27 @@ eyeroll history
 ```
 /eyeroll:watch https://loom.com/share/abc123
     ↓
-1. Download video (yt-dlp)
+1. Preflight check (verify backend is reachable, detect capabilities)
     ↓
-2. Extract frames (1 per 2s, deduplicate, enhance contrast)
+2. Download video (yt-dlp)
     ↓
-3. Analyze frames (Gemini / GPT-4o / Qwen3-VL)
-   + transcribe audio if present
+3. Choose strategy:
+   - Gemini API key: direct upload via File API (up to 2GB)
+   - Gemini service account: direct upload (up to 20MB)
+   - OpenAI / OpenRouter / Groq: multi-frame batch (all frames in one call)
+   - Ollama: frame-by-frame (one frame per call)
     ↓
-4. Cache intermediates (reuse on next run)
+4. Transcribe audio if present
     ↓
-5. Synthesize report with codebase context:
-   - Bug Description
+5. Cache intermediates (reuse on next run)
+    ↓
+6. Synthesize report with codebase context:
+   - Metadata: category, confidence, scope, severity, actionable
+   - Bug Description + Reproduction Steps
    - Fix Directions (Visible / Codebase-informed / Hypothesis)
    - Search patterns for the coding agent
     ↓
-6. Present summary to user
+7. Present summary to user
     ↓
 /eyeroll:fix goes further:
    → grep codebase → read files → implement fix → run tests → PR
@@ -98,16 +104,16 @@ eyeroll history
 
 ## Backends
 
-| Backend | Video | Audio | API Key | Cost | Best for |
-|---------|-------|-------|---------|------|----------|
-| **gemini** | Direct upload | Yes | GEMINI_API_KEY | ~$0.15 | Best quality |
-| **openai** | Frame-by-frame | Whisper | OPENAI_API_KEY | ~$0.20 | Existing OpenAI users |
+| Backend | Strategy | Audio | API Key | Cost | Best for |
+|---------|----------|-------|---------|------|----------|
+| **gemini** | Direct upload (up to 2GB) | Yes | GEMINI_API_KEY | ~$0.15 | Best quality |
+| **openai** | Multi-frame batch | Whisper | OPENAI_API_KEY | ~$0.20 | Existing OpenAI users |
 | **ollama** | Frame-by-frame | No | None | Free | Privacy, offline |
-| **openrouter** | Frame-by-frame | Yes | OPENROUTER_API_KEY | varies | Model variety |
-| **groq** | Frame-by-frame | Yes | GROQ_API_KEY | cheap | Low latency |
-| **grok** | Frame-by-frame | Yes | GROK_API_KEY | varies | xAI models |
-| **cerebras** | Frame-by-frame | Yes | CEREBRAS_API_KEY | cheap | Fast inference |
-| **openai-compat** | Frame-by-frame | No | any env var | varies | Custom/self-hosted endpoints |
+| **openrouter** | Multi-frame batch | No | OPENROUTER_API_KEY | varies | Model variety |
+| **groq** | Multi-frame batch | No | GROQ_API_KEY | cheap | Low latency |
+| **grok** | Multi-frame batch | No | GROK_API_KEY | varies | xAI models |
+| **cerebras** | Multi-frame batch | No | CEREBRAS_API_KEY | cheap | Fast inference |
+| **openai-compat** | Multi-frame batch | No | any env var | varies | Custom/self-hosted endpoints |
 
 Ollama auto-installs if not found (macOS/Linux).
 
@@ -140,7 +146,7 @@ eyeroll/
     video-to-skill/      ← activated by "create a skill from this video"
   eyeroll/               ← Python CLI package
     cli.py, watch.py, analyze.py, extract.py, backend.py, history.py
-  tests/                 ← 144 unit + 8 integration tests
+  tests/                 ← 269 unit + 8 integration tests
 ```
 
 ## Supported inputs

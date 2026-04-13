@@ -54,13 +54,30 @@ eyeroll determines what kind of content the video shows:
 | **Code review** | PR diff walkthrough | Files reviewed, concerns noted |
 | **General notes** | Meeting, brainstorm | Key takeaways, action items |
 
+### Report metadata
+
+Every report starts with a structured metadata block:
+
+```
+category: bug | feature | other
+confidence: high | medium | low
+scope: in-context | out-of-context
+severity: critical | moderate | low
+actionable: yes | no
+```
+
+- **category**: bug for bug reports, feature for demos/requests/tutorials, other for everything else
+- **scope**: in-context if the video relates to the current codebase, out-of-context otherwise
+- **actionable**: yes if a coding agent can take concrete action, no if informational only
+
 ### Common sections
 
 Every report includes:
 
 | Section | Content |
 |---|---|
-| **Content Type** | Classification with confidence level |
+| **Metadata** | Category, confidence, scope, severity, actionable |
+| **Content Type** | Classification |
 | **Summary** | One-sentence description of what the video shows |
 | **What's Happening** | Step-by-step walkthrough |
 | **Key Details** | Exact text from screen -- errors, URLs, status codes |

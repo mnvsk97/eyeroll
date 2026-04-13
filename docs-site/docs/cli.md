@@ -36,7 +36,8 @@ eyeroll watch <source> [options]
 |---|---|---|---|
 | `--context` | `-c` | None | Additional context text |
 | `--codebase-context` | `-cc` | None | Codebase context (inline text or path to file) |
-| `--backend` | `-b` | `EYEROLL_BACKEND` or `gemini` | Backend: `gemini`, `openai`, or `ollama` |
+| `--backend` | `-b` | `EYEROLL_BACKEND` or `gemini` | Backend: `gemini`, `openai`, `ollama`, `openrouter`, `groq`, `grok`, `cerebras`, `openai-compat` |
+| `--base-url` | | None | Base URL for `openai-compat` backend |
 | `--model` | `-m` | Backend default | Model override |
 | `--max-frames` | | 20 | Maximum key frames to analyze |
 | `--parallel` | `-p` | 3 (API) / 1 (ollama) | Concurrent workers for frame analysis |
@@ -126,7 +127,11 @@ eyeroll history clear --yes
 |---|---|---|
 | `EYEROLL_BACKEND` | Default backend | `gemini` |
 | `GEMINI_API_KEY` | Gemini API key | |
-| `OPENAI_API_KEY` | OpenAI API key | |
+| `OPENAI_API_KEY` | OpenAI API key (also fallback for compatible providers) | |
+| `OPENROUTER_API_KEY` | OpenRouter API key | |
+| `GROQ_API_KEY` | Groq API key | |
+| `GROK_API_KEY` | xAI Grok API key | |
+| `CEREBRAS_API_KEY` | Cerebras API key | |
 | `OLLAMA_HOST` | Ollama server address | `http://localhost:11434` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to Google service account JSON | |
 | `GOOGLE_CLOUD_PROJECT` | Google Cloud project ID (for service account) | |

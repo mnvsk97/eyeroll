@@ -17,9 +17,10 @@ export EYEROLL_BACKEND=openai
 | Feature | Supported |
 |---|---|
 | Direct video upload | No |
-| Frame-by-frame analysis | Yes |
+| Multi-frame batch | Yes (all frames in one API call) |
 | Audio transcription | Yes (Whisper) |
 | Text generation | Yes |
+| Preflight health check | Yes (verifies API key) |
 
 ## Model
 
@@ -36,12 +37,24 @@ eyeroll watch video.mp4 --backend openai --model gpt-4o
 
 ## How it works
 
-OpenAI does not support direct video upload. eyeroll always uses the frame-by-frame strategy:
+OpenAI does not support direct video upload. eyeroll uses the **multi-frame batch** strategy:
 
 1. Extract key frames from the video
-2. Send each frame as a base64-encoded image to GPT-4o
+2. Send all frames as base64-encoded images in a single API call to GPT-4o, with timestamps per frame
 3. Transcribe audio using Whisper (`whisper-1` model)
-4. Synthesize the report from frame analyses and transcript
+4. Synthesize the report from the batch analysis and transcript
+
+This is more efficient than frame-by-frame (one API call instead of N) and gives the model temporal context across all frames.
+
+## OpenAI-compatible providers
+
+The OpenAI backend also powers OpenRouter, Groq, Grok, Cerebras, and custom endpoints. These use the same multi-frame batch strategy but without Whisper audio transcription.
+
+```bash
+eyeroll watch video.mp4 --backend openrouter
+eyeroll watch video.mp4 --backend groq
+eyeroll watch video.mp4 --backend openai-compat --base-url https://my-server/v1
+```
 
 ## Audio transcription
 

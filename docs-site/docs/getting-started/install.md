@@ -40,7 +40,7 @@ Install the Python CLI with the backend you want:
     ```
 
 !!! tip "URL downloads"
-    To analyze videos from URLs (YouTube, Loom, etc.), you also need `yt-dlp`. Add the `download` extra: `pip install eyeroll[gemini,download]`. If you only analyze local files, you don't need it. The `all` extra includes everything.
+    `yt-dlp` is included as a core dependency. URL downloads (YouTube, Loom, etc.) work out of the box with any install method.
 
 ## Prerequisites
 
@@ -48,7 +48,7 @@ Install the Python CLI with the backend you want:
 |---|---|---|
 | Python 3.11+ | Runtime | [python.org](https://www.python.org/downloads/) |
 | ffmpeg | Frame extraction, audio extraction | `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Linux) |
-| yt-dlp | Downloading from URLs (optional) | Included with `[download]` extra |
+| yt-dlp | Downloading from URLs | Included as a dependency |
 
 !!! note "ffmpeg fallback"
     If ffmpeg is not on your PATH, eyeroll falls back to the `imageio-ffmpeg` bundled binary (included as a dependency). System ffmpeg is preferred because it includes ffprobe for more accurate duration detection and audio track detection.

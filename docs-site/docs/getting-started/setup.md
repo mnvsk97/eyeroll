@@ -38,8 +38,14 @@ Which backend do you want to use?
 
 Choose [1/2/3]: 1
 
+How do you want to authenticate with Google?
+
+  1. API key         -- get one at https://aistudio.google.com/apikey
+  2. credentials.json -- service account for Vertex AI
+
+Choose [1/2]: 1
+
 Enter your Gemini API key
-  Get one at https://aistudio.google.com/apikey
   (input is hidden): ****
 
 Validating API key...

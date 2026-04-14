@@ -1,18 +1,23 @@
 """eyeroll hosted API server.
 
-Routes:
-    GET  /                    Serve landing page
-    POST /signup              {email} → {api_key}
-    POST /api/watch           {source, context?, max_frames?} → report string
-    GET  /api/usage           → {used_today, limit, reset_at}
-    POST /api/keys/rotate     {} → {api_key}
+Routes
+------
+GET  /                       Landing page
+POST /signup                 {email} → {api_key, key_id, key_name}
+
+GET  /api/keys               List all API keys for the authenticated user
+POST /api/keys               {name?} → create a new key
+PATCH /api/keys/{key_id}     {name} → rename a key
+DELETE /api/keys/{key_id}    Revoke a key (must have ≥1 remaining)
+
+POST /api/watch              {source, context?, max_frames?} → {report}
+GET  /api/usage              → {used_today, limit, reset_at}
 
 Run:
     uvicorn eyeroll.server.main:app --host 0.0.0.0 --port $PORT
 """
 
 import os
-import tempfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -22,17 +27,20 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 
 from .db import (
     RATE_LIMIT,
     check_rate_limit,
+    create_key,
     create_user,
+    delete_key,
     get_user_by_key,
     init_pool,
+    list_keys,
     log_usage,
-    rotate_key,
+    rename_key,
+    usage_today,
 )
 
 app = FastAPI(title="eyeroll API", docs_url=None, redoc_url=None)
@@ -48,18 +56,18 @@ async def _startup():
 
 
 # ---------------------------------------------------------------------------
-# Auth helper
+# Auth
 # ---------------------------------------------------------------------------
 
 async def _auth(authorization: str = Header(default=None)) -> dict:
-    """Validate Bearer token and return user row."""
+    """Validate Bearer token. Returns {user_id, email, key_id}."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header.")
-    api_key = authorization.removeprefix("Bearer ").strip()
-    user = await get_user_by_key(_pool, api_key)
-    if not user:
+    raw_key = authorization.removeprefix("Bearer ").strip()
+    ctx = await get_user_by_key(_pool, raw_key)
+    if not ctx:
         raise HTTPException(status_code=401, detail="Invalid API key.")
-    return user
+    return ctx
 
 
 # ---------------------------------------------------------------------------
@@ -84,8 +92,64 @@ class SignupRequest(BaseModel):
 
 @app.post("/signup")
 async def signup(body: SignupRequest):
-    user = await create_user(_pool, body.email)
-    return {"api_key": user["api_key"]}
+    """Create account (idempotent on email). Returns the default API key."""
+    user, key = await create_user(_pool, body.email)
+    return {
+        "api_key": key["key"],
+        "key_id": key["id"],
+        "key_name": key["name"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Key CRUD  /api/keys
+# ---------------------------------------------------------------------------
+
+class CreateKeyRequest(BaseModel):
+    name: str = "default"
+
+
+class RenameKeyRequest(BaseModel):
+    name: str
+
+
+@app.get("/api/keys")
+async def keys_list(ctx: dict = Depends(_auth)):
+    """List all API keys for the authenticated user."""
+    rows = await list_keys(_pool, ctx["user_id"])
+    return {
+        "keys": [
+            {"id": r["id"], "name": r["name"], "key": r["key"], "created_at": str(r["created_at"])}
+            for r in rows
+        ]
+    }
+
+
+@app.post("/api/keys", status_code=201)
+async def keys_create(body: CreateKeyRequest, ctx: dict = Depends(_auth)):
+    """Create a new API key for the authenticated user."""
+    row = await create_key(_pool, ctx["user_id"], body.name)
+    return {"api_key": row["key"], "key_id": row["id"], "key_name": row["name"]}
+
+
+@app.patch("/api/keys/{key_id}")
+async def keys_rename(key_id: str, body: RenameKeyRequest, ctx: dict = Depends(_auth)):
+    """Rename an API key."""
+    updated = await rename_key(_pool, ctx["user_id"], key_id, body.name)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Key not found.")
+    return {"id": updated["id"], "name": updated["name"], "key": updated["key"]}
+
+
+@app.delete("/api/keys/{key_id}", status_code=204)
+async def keys_delete(key_id: str, ctx: dict = Depends(_auth)):
+    """Revoke an API key. At least one key must remain."""
+    try:
+        deleted = await delete_key(_pool, ctx["user_id"], key_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Key not found.")
 
 
 # ---------------------------------------------------------------------------
@@ -99,8 +163,8 @@ class WatchRequest(BaseModel):
 
 
 @app.post("/api/watch")
-async def watch(body: WatchRequest, user: dict = Depends(_auth)):
-    allowed, used = await check_rate_limit(_pool, user["id"])
+async def watch(body: WatchRequest, ctx: dict = Depends(_auth)):
+    allowed, used = await check_rate_limit(_pool, ctx["user_id"])
     if not allowed:
         reset_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
         raise HTTPException(
@@ -118,17 +182,16 @@ async def watch(body: WatchRequest, user: dict = Depends(_auth)):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    await log_usage(_pool, user["id"])
+    await log_usage(_pool, ctx["user_id"], ctx["key_id"])
     return {"report": report}
 
 
 async def _run_analysis(source: str, context: str | None, max_frames: int) -> str:
-    """Run the eyeroll pipeline using the server's credentials."""
     import asyncio
     from eyeroll.watch import watch as run_watch
 
     loop = asyncio.get_event_loop()
-    report = await loop.run_in_executor(
+    return await loop.run_in_executor(
         None,
         lambda: run_watch(
             source=source,
@@ -140,18 +203,14 @@ async def _run_analysis(source: str, context: str | None, max_frames: int) -> st
             parallel=3,
         ),
     )
-    return report
 
 
 def _pick_backend() -> str:
-    """Choose cheapest available backend based on what keys are configured."""
     if os.environ.get("GEMINI_API_KEY"):
         return "gemini"
     if os.environ.get("OPENAI_API_KEY"):
         return "openai"
-    raise RuntimeError(
-        "No AI backend configured on server. Set GEMINI_API_KEY or OPENAI_API_KEY."
-    )
+    raise RuntimeError("No AI backend configured. Set GEMINI_API_KEY or OPENAI_API_KEY.")
 
 
 # ---------------------------------------------------------------------------
@@ -159,22 +218,7 @@ def _pick_backend() -> str:
 # ---------------------------------------------------------------------------
 
 @app.get("/api/usage")
-async def get_usage(user: dict = Depends(_auth)):
-    from .db import usage_today
-    used = await usage_today(_pool, user["id"])
+async def get_usage(ctx: dict = Depends(_auth)):
+    used = await usage_today(_pool, ctx["user_id"])
     reset_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
-    return {
-        "used_today": used,
-        "limit": RATE_LIMIT,
-        "reset_at": reset_at,
-    }
-
-
-# ---------------------------------------------------------------------------
-# /api/keys/rotate
-# ---------------------------------------------------------------------------
-
-@app.post("/api/keys/rotate")
-async def rotate(user: dict = Depends(_auth)):
-    new_key = await rotate_key(_pool, user["id"])
-    return {"api_key": new_key}
+    return {"used_today": used, "limit": RATE_LIMIT, "reset_at": reset_at}

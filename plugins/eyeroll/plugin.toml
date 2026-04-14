@@ -45,6 +45,31 @@ name = "api-rotate-key"
 description = "Rotate your EYEROLL_API_KEY — old key is immediately invalidated"
 file = "commands/api-rotate-key.md"
 
+[[commands]]
+name = "signup"
+description = "Sign up for eyeroll and get your first free API key"
+file = "commands/signup.md"
+
+[[commands]]
+name = "keys-list"
+description = "List all your eyeroll API keys"
+file = "commands/keys-list.md"
+
+[[commands]]
+name = "keys-create"
+description = "Create a new eyeroll API key with an optional name"
+file = "commands/keys-create.md"
+
+[[commands]]
+name = "keys-delete"
+description = "Revoke an eyeroll API key by ID"
+file = "commands/keys-delete.md"
+
+[[commands]]
+name = "keys-rename"
+description = "Rename an eyeroll API key"
+file = "commands/keys-rename.md"
+
 [[skills]]
 name = "video-to-skill"
 description = "Convert a video walkthrough into a reusable Claude Code skill"

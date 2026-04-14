@@ -45,6 +45,7 @@ Issues = "https://github.com/mnvsk97/eyeroll/issues"
 
 [project.scripts]
 eyeroll = "eyeroll.cli:cli"
+eyeroll-mcp = "eyeroll.mcp_server:main"
 
 [project.optional-dependencies]
 gemini = [
@@ -54,6 +55,14 @@ openai = [
     "openai>=1.0",
 ]
 all = [
+    "google-genai>=1.0",
+    "openai>=1.0",
+]
+server = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "asyncpg>=0.29",
+    "python-multipart>=0.0.9",
     "google-genai>=1.0",
     "openai>=1.0",
 ]

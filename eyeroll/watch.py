@@ -68,7 +68,17 @@ def watch(
 
     # Initialize backend early to fail fast on config errors
     backend = get_backend(backend_name, **backend_kwargs)
-    backend_label = backend_name or os.environ.get("EYEROLL_BACKEND", "gemini")
+    backend_label = backend_name or os.environ.get("EYEROLL_BACKEND")
+    if backend_label is None:
+        from .backend import EyerollAPIBackend
+        backend_label = "eyeroll-api" if isinstance(backend, EyerollAPIBackend) else "gemini"
+
+    # Short-circuit for the hosted API backend — it runs the full pipeline remotely
+    from .backend import EyerollAPIBackend
+    if isinstance(backend, EyerollAPIBackend):
+        if verbose:
+            print(f"Backend: eyeroll-api (hosted)", file=sys.stderr)
+        return backend.watch(source=source, context=context, max_frames=max_frames)
 
     # Preflight: verify backend is reachable and discover capabilities
     from .backend import AnalysisError

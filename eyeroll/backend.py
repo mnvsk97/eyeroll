@@ -609,6 +609,87 @@ class OllamaBackend(Backend):
 
 
 # ---------------------------------------------------------------------------
+# eyeroll hosted API backend
+# ---------------------------------------------------------------------------
+
+class EyerollAPIBackend(Backend):
+    """Routes analysis requests to the eyeroll hosted API.
+
+    Used automatically when EYEROLL_API_KEY is set in the environment.
+    The server handles backend selection and AI calls; the client just
+    sends the source URL/path and receives the report.
+    """
+
+    def __init__(self):
+        self._api_key = os.environ.get("EYEROLL_API_KEY")
+        self._api_url = os.environ.get("EYEROLL_API_URL", "https://api.eyeroll.dev").rstrip("/")
+        if not self._api_key:
+            raise AnalysisError(
+                "EYEROLL_API_KEY is not set. "
+                "Get a free key at https://api.eyeroll.dev or run `eyeroll init`."
+            )
+
+    @property
+    def supports_video(self) -> bool:
+        return False  # server handles strategy internally
+
+    @property
+    def supports_audio(self) -> bool:
+        return False
+
+    def analyze_image(self, image_path: str, prompt: str, verbose: bool = False) -> str:
+        raise NotImplementedError("Use the watch() pipeline, not analyze_image() directly.")
+
+    def analyze_video(self, video_path: str, prompt: str, verbose: bool = False) -> str:
+        raise NotImplementedError("Use the watch() pipeline, not analyze_video() directly.")
+
+    def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+        raise NotImplementedError("Use the watch() pipeline, not analyze_audio() directly.")
+
+    def generate(self, prompt: str, verbose: bool = False) -> str:
+        raise NotImplementedError("Use the watch() pipeline, not generate() directly.")
+
+    def watch(self, source: str, context: str | None = None, max_frames: int = 20) -> str:
+        """Send a watch request to the hosted API and return the report."""
+        import urllib.request
+        import json as _json
+
+        payload = _json.dumps({"source": source, "context": context, "max_frames": max_frames}).encode()
+        req = urllib.request.Request(
+            f"{self._api_url}/api/watch",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                data = _json.loads(resp.read())
+                return data["report"]
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            try:
+                detail = _json.loads(body).get("detail", body)
+            except Exception:
+                detail = body
+            raise AnalysisError(f"eyeroll API error {exc.code}: {detail}") from exc
+
+    def preflight(self) -> dict:
+        return {
+            "healthy": True,
+            "error": None,
+            "capabilities": {
+                "video_upload": False,
+                "batch_frames": False,
+                "audio": False,
+                "max_video_mb": None,
+            },
+        }
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
@@ -620,8 +701,9 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
 
     Args:
         name: Backend name. One of: 'gemini', 'openai', 'ollama', 'openrouter', 'groq',
-              'grok', 'cerebras', 'openai-compat'.
-              Defaults to EYEROLL_BACKEND env var, then 'gemini'.
+              'grok', 'cerebras', 'openai-compat', 'eyeroll-api'.
+              Defaults to EYEROLL_BACKEND env var, then 'eyeroll-api' if EYEROLL_API_KEY
+              is set, otherwise 'gemini'.
         **kwargs: Passed to backend constructor (e.g., model, host, base_url).
     """
     global _current_backend
@@ -629,7 +711,9 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
         return _current_backend
 
     if name is None:
-        name = os.environ.get("EYEROLL_BACKEND", "gemini")
+        name = os.environ.get("EYEROLL_BACKEND")
+        if name is None:
+            name = "eyeroll-api" if os.environ.get("EYEROLL_API_KEY") else "gemini"
 
     if name == "gemini":
         _current_backend = GeminiBackend(**kwargs)
@@ -637,6 +721,8 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
         _current_backend = OpenAIBackend(**kwargs)
     elif name == "ollama":
         _current_backend = OllamaBackend(**kwargs)
+    elif name == "eyeroll-api":
+        _current_backend = EyerollAPIBackend()
     elif name in _OPENAI_COMPAT_PROVIDERS:
         url, key_env, default_model, has_whisper = _OPENAI_COMPAT_PROVIDERS[name]
         _current_backend = OpenAIBackend(
@@ -651,7 +737,7 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
     else:
         raise ValueError(
             f"Unknown backend: {name}. "
-            "Use 'gemini', 'openai', 'ollama', 'openrouter', 'groq', 'grok', "
+            "Use 'gemini', 'openai', 'ollama', 'eyeroll-api', 'openrouter', 'groq', 'grok', "
             "'cerebras', or 'openai-compat'."
         )
 

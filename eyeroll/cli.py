@@ -226,9 +226,9 @@ def _validate_openai(api_key: str) -> None:
 @click.option("--max-frames", default=20, show_default=True,
               help="Maximum key frames to analyze from video.")
 @click.option("--backend", "-b",
-              type=click.Choice(["gemini", "openai", "ollama", "openrouter", "groq", "grok", "cerebras", "openai-compat"]),
+              type=click.Choice(["gemini", "openai", "ollama", "openrouter", "groq", "grok", "cerebras", "openai-compat", "eyeroll-api"]),
               default=None,
-              help="Vision backend. Defaults to EYEROLL_BACKEND env var, then gemini.")
+              help="Vision backend. Defaults to EYEROLL_BACKEND env var, then eyeroll-api if EYEROLL_API_KEY is set, else gemini.")
 @click.option("--base-url", default=None,
               help="Base URL for --backend openai-compat (e.g. https://my-server/v1).")
 @click.option("--model", "-m", default=None,
@@ -248,7 +248,8 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
 
     \b
     Backends:
-      gemini       Google Gemini Flash API (default, requires GEMINI_API_KEY)
+      eyeroll-api  Hosted eyeroll API (default when EYEROLL_API_KEY is set)
+      gemini       Google Gemini Flash API (requires GEMINI_API_KEY)
       openai       OpenAI GPT-4o (requires OPENAI_API_KEY)
       ollama       Local models via Ollama (e.g., qwen3-vl, no API key needed)
       openrouter   OpenRouter API (requires OPENROUTER_API_KEY)
@@ -279,10 +280,13 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
     if base_url and not backend:
         backend = "openai-compat"
 
+    # eyeroll-api: no local parallel needed (server handles it)
     # Default parallel workers: 3 for API backends (separate servers), 1 for ollama (single GPU)
     if parallel is None:
-        effective_backend = backend or os.environ.get("EYEROLL_BACKEND", "gemini")
-        parallel = 1 if effective_backend == "ollama" else 3
+        effective_backend = backend or os.environ.get("EYEROLL_BACKEND")
+        if effective_backend is None:
+            effective_backend = "eyeroll-api" if os.environ.get("EYEROLL_API_KEY") else "gemini"
+        parallel = 1 if effective_backend in ("ollama", "eyeroll-api") else 3
 
     # Resolve --codebase-context: if it's a file path, read it
     if codebase_context and os.path.isfile(os.path.expanduser(codebase_context)):

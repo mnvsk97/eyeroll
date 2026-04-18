@@ -1,6 +1,6 @@
 [project]
 name = "eyeroll"
-version = "0.4.3"
+version = "0.5.0"
 description = "AI eyes that roll through video footage — watch, understand, turn into code actions."
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -35,6 +35,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "imageio-ffmpeg>=0.5",
     "yt-dlp>=2024.0",
+    "Pillow>=10.0",
 ]
 
 [project.urls]
@@ -45,6 +46,7 @@ Issues = "https://github.com/mnvsk97/eyeroll/issues"
 
 [project.scripts]
 eyeroll = "eyeroll.cli:cli"
+eyeroll-mcp = "eyeroll.mcp_server:main"
 
 [project.optional-dependencies]
 gemini = [
@@ -54,6 +56,15 @@ openai = [
     "openai>=1.0",
 ]
 all = [
+    "google-genai>=1.0",
+    "openai>=1.0",
+]
+server = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "asyncpg>=0.29",
+    "python-multipart>=0.0.9",
+    "pydantic[email]>=2.0",
     "google-genai>=1.0",
     "openai>=1.0",
 ]

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0
+
+- **Auto-discover codebase context**: Automatically finds CLAUDE.md, AGENTS.md, .cursorrules, codex.md, and other coding tool context files at watch-time. No more manual `--codebase-context` needed.
+- **Global cache**: Cache moved to `~/.eyeroll/cache/` — same video analyzed from any project reuses cached analysis. URLs are now content-hashed (same video via different links = cache hit).
+- **Gemini 2.5-flash**: Default model upgraded from 2.0-flash to 2.5-flash
+- **Whisper confidence filtering**: Low-confidence audio segments are dropped. `--min-audio-confidence` flag (default 0.4). Warns when audio quality is poor.
+- **Scene-change frame detection**: PIL-based pixel-diff for smarter frame extraction. `--scene-threshold` flag (default 0 = existing behavior, set to 30.0 to enable).
+- **Frame context chaining**: Sequential frame analysis passes previous frame's summary to the next frame's prompt for better continuity.
+- **Cost estimates**: Prints estimated cost to stderr after analysis. `--no-cost` flag to suppress. Ollama always shows $0.00.
+- **New flags**: `--no-context`, `--no-cost`, `--min-audio-confidence`, `--scene-threshold`
+- **Pillow** added as core dependency (for scene-change detection)
+- Removed Ollama auto-install — users install Ollama themselves
+- Staleness tracking for generated `.eyeroll/context.md` via `context_meta.json`
+- Plugin commands no longer hardcode `--codebase-context .eyeroll/context.md`
+
 ## 0.3.4
 
 - OSS readiness: code cleanup, docs consistency, contributor tooling

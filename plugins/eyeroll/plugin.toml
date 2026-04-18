@@ -1,6 +1,6 @@
 [plugin]
 name = "eyeroll"
-version = "0.4.2"
+version = "0.5.0"
 description = "AI eyes that roll through video footage — watch, understand, act"
 author = "mnvsk97"
 repository = "https://github.com/mnvsk97/eyeroll"
@@ -29,6 +29,46 @@ file = "commands/fix.md"
 name = "history"
 description = "View past eyeroll analysis reports"
 file = "commands/history.md"
+
+[[commands]]
+name = "api-watch"
+description = "Analyze a video via the eyeroll hosted API (uses EYEROLL_API_KEY)"
+file = "commands/api-watch.md"
+
+[[commands]]
+name = "api-usage"
+description = "Check how many analyses you've used today against the daily limit"
+file = "commands/api-usage.md"
+
+[[commands]]
+name = "api-rotate-key"
+description = "Rotate your EYEROLL_API_KEY — old key is immediately invalidated"
+file = "commands/api-rotate-key.md"
+
+[[commands]]
+name = "signup"
+description = "Sign up for eyeroll and get your first free API key"
+file = "commands/signup.md"
+
+[[commands]]
+name = "keys-list"
+description = "List all your eyeroll API keys"
+file = "commands/keys-list.md"
+
+[[commands]]
+name = "keys-create"
+description = "Create a new eyeroll API key with an optional name"
+file = "commands/keys-create.md"
+
+[[commands]]
+name = "keys-delete"
+description = "Revoke an eyeroll API key by ID"
+file = "commands/keys-delete.md"
+
+[[commands]]
+name = "keys-rename"
+description = "Rename an eyeroll API key"
+file = "commands/keys-rename.md"
 
 [[skills]]
 name = "video-to-skill"

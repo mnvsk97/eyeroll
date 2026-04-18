@@ -59,7 +59,7 @@ Returns structured JSON for programmatic use:
 /eyeroll:history clear
 ```
 
-Removes all cached analyses from `.eyeroll/cache/`. Prompts for confirmation unless `--yes` is passed.
+Removes all cached analyses from `~/.eyeroll/cache/` (and legacy `.eyeroll/cache/`). Prompts for confirmation unless `--yes` is passed.
 
 ```bash
 # Skip confirmation

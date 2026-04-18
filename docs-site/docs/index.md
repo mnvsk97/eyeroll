@@ -108,7 +108,7 @@ See the [Backends overview](backends/overview.md) for details on each.
 
 ## Caching
 
-eyeroll caches frame analyses and transcripts in `.eyeroll/cache/`. Same video = no re-analysis. Different `--context` re-runs only the cheap synthesis step.
+eyeroll caches frame analyses and transcripts in `~/.eyeroll/cache/` (global). Same video = no re-analysis. Different `--context` re-runs only the cheap synthesis step.
 
 ```bash
 eyeroll watch video.mp4                    # full analysis (~15s)

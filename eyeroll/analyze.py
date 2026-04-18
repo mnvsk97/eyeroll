@@ -226,7 +226,7 @@ def analyze_frames(
     if not frames:
         return []
 
-    def _analyze_one(frame: dict) -> dict:
+    def _analyze_one(frame: dict, previous_context: str | None = None) -> dict:
         if verbose:
             from .extract import fmt_timestamp
             print(
@@ -240,6 +240,10 @@ def analyze_frames(
             timestamp=f"{frame['timestamp']:.1f}s",
         )
 
+        # Chain context from previous frame (sequential mode only)
+        if previous_context:
+            prompt = f"Previous frame context: {previous_context}\n\n{prompt}"
+
         text = backend.analyze_image(frame["frame_path"], prompt, verbose=verbose)
 
         return {
@@ -249,6 +253,7 @@ def analyze_frames(
         }
 
     if parallel > 1 and len(frames) > 1:
+        # Parallel mode: no context chaining (frames analyzed independently)
         from concurrent.futures import ThreadPoolExecutor, as_completed
         workers = min(parallel, len(frames))
         results = []
@@ -260,7 +265,16 @@ def analyze_frames(
         results.sort(key=lambda r: r["frame_index"])
         return results
 
-    return [_analyze_one(frame) for frame in frames]
+    # Sequential mode: chain context from previous frame
+    results = []
+    previous_context = None
+    for frame in frames:
+        result = _analyze_one(frame, previous_context=previous_context)
+        results.append(result)
+        # Truncate to max 300 chars for the next frame's context
+        summary = result["analysis"]
+        previous_context = summary[:300] if len(summary) > 300 else summary
+    return results
 
 
 def analyze_video_direct(
@@ -292,6 +306,7 @@ def analyze_audio(
     audio_path: str,
     backend_name: str | None = None,
     verbose: bool = False,
+    min_confidence: float = 0.4,
     **backend_kwargs,
 ) -> str:
     """Transcribe audio using the configured backend."""
@@ -300,7 +315,9 @@ def analyze_audio(
     if verbose:
         print("  Transcribing audio...", file=sys.stderr)
 
-    return backend.analyze_audio(audio_path, AUDIO_PROMPT, verbose=verbose)
+    return backend.analyze_audio(
+        audio_path, AUDIO_PROMPT, verbose=verbose, min_confidence=min_confidence,
+    )
 
 
 def synthesize_report(

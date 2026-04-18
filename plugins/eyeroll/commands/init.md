@@ -57,9 +57,22 @@ Write `.eyeroll/context.md` with this structure — keep it under 80 lines:
 <anything relevant — conventions, known issues>
 ```
 
+Also write `.eyeroll/context_meta.json` with the generation timestamp:
+
+```json
+{"generated_at": "<current UTC ISO timestamp>"}
+```
+
+This lets eyeroll detect when the context goes stale (newer commits than the context).
+
+**Note:** If the project already has `CLAUDE.md`, `AGENTS.md`, or similar coding tool context files,
+eyeroll auto-discovers those at watch-time — `.eyeroll/context.md` is only needed as a fallback
+when no such files exist.
+
 ## Step 4: Confirm
 
 Tell the user:
 - eyeroll is ready
-- `.eyeroll/context.md` has been generated
+- `.eyeroll/context.md` has been generated (with staleness tracking)
+- Codebase context is auto-discovered from CLAUDE.md, AGENTS.md, etc. if present
 - They can run `/eyeroll:watch <video>` to analyze a video

@@ -25,6 +25,10 @@ The agent then presents a concise summary rather than dumping the raw report.
 |---|---|
 | `<url-or-path>` | Video URL (YouTube, Loom, etc.) or local file path |
 | `--context "..."` | Additional context about the video (what it shows, what you want done) |
+| `--no-context` | Skip auto-discovery of codebase context (CLAUDE.md, AGENTS.md, etc.) |
+| `--no-cost` | Suppress cost estimate output |
+| `--min-audio-confidence` | Minimum confidence for Whisper audio segments (0.0-1.0, default 0.4) |
+| `--scene-threshold` | Pixel-diff threshold for scene-change frame extraction (default 30.0, 0=fixed interval) |
 
 If you mention context in conversation without using the `--context` flag, the agent will pick it up and pass it along.
 

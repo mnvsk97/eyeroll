@@ -30,6 +30,18 @@ class AnalysisError(RuntimeError):
     """Raised when analysis fails."""
 
 
+def _logprob_from_confidence(confidence: float) -> float:
+    """Convert a 0-1 confidence threshold to a log-probability threshold.
+
+    Whisper segments report avg_logprob (log base e). A confidence of 0.4
+    corresponds to ln(0.4) ≈ -0.916.
+    """
+    import math
+    if confidence <= 0:
+        return -float("inf")
+    return math.log(confidence)
+
+
 class Backend(ABC):
     """Base class for vision/language model backends."""
 
@@ -44,7 +56,10 @@ class Backend(ABC):
         ...
 
     @abstractmethod
-    def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+    def analyze_audio(
+        self, audio_path: str, prompt: str, verbose: bool = False,
+        min_confidence: float = 0.4,
+    ) -> str:
         """Analyze/transcribe an audio file. Returns text response."""
         ...
 
@@ -110,7 +125,7 @@ class Backend(ABC):
 class GeminiBackend(Backend):
     """Google Gemini Flash API backend."""
 
-    def __init__(self, model: str = "gemini-2.0-flash"):
+    def __init__(self, model: str = "gemini-2.5-flash"):
         try:
             from google import genai
         except ImportError:
@@ -227,7 +242,10 @@ class GeminiBackend(Backend):
             except Exception:
                 pass
 
-    def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+    def analyze_audio(
+        self, audio_path: str, prompt: str, verbose: bool = False,
+        min_confidence: float = 0.4,
+    ) -> str:
         from google.genai import types
         with open(audio_path, "rb") as f:
             audio_bytes = f.read()
@@ -347,7 +365,10 @@ class OpenAIBackend(Backend):
             "Use frame-by-frame mode instead."
         )
 
-    def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+    def analyze_audio(
+        self, audio_path: str, prompt: str, verbose: bool = False,
+        min_confidence: float = 0.4,
+    ) -> str:
         if not self._has_whisper:
             raise AnalysisError(
                 f"Audio transcription is not supported for this provider. "
@@ -357,8 +378,23 @@ class OpenAIBackend(Backend):
             transcript = self._client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
+                response_format="verbose_json",
             )
-        return transcript.text
+
+        # Filter segments by confidence
+        segments = list(getattr(transcript, "segments", None) or [])
+        if not segments:
+            return getattr(transcript, "text", "") or ""
+
+        kept = [s for s in segments if getattr(s, "avg_logprob", 0.0) >= _logprob_from_confidence(min_confidence)]
+        drop_ratio = 1 - (len(kept) / len(segments))
+
+        text = " ".join(getattr(s, "text", "").strip() for s in kept if getattr(s, "text", ""))
+
+        if drop_ratio > 0.5:
+            text = f"[audio_quality: poor]\n{text}"
+
+        return text
 
     def generate(self, prompt: str, verbose: bool = False) -> str:
         response = self._client.chat.completions.create(
@@ -434,64 +470,13 @@ class OllamaBackend(Backend):
         import urllib.error
         try:
             req = urllib.request.Request(f"{self._host}/api/tags")
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=5):
                 pass
         except (urllib.error.URLError, ConnectionRefusedError, OSError):
-            # Try to install and start Ollama automatically
-            if self._try_install_ollama():
-                return
             raise AnalysisError(
-                f"Cannot connect to Ollama at {self._host}.\n\n"
-                "Make sure Ollama is running:\n"
-                "  ollama serve\n\n"
-                "Install Ollama: https://ollama.com"
+                f"Cannot connect to Ollama at {self._host}. "
+                "Start with: ollama serve — Install: https://ollama.com"
             )
-
-    def _try_install_ollama(self) -> bool:
-        """Try to install Ollama and start the server. Returns True if successful."""
-        import platform
-        import shutil
-        import subprocess
-        import time
-        import urllib.request
-
-        # Check if ollama binary exists but server isn't running
-        if shutil.which("ollama"):
-            print("  Ollama found but not running. Starting ollama serve...", file=sys.stderr)
-        else:
-            # Install Ollama
-            if platform.system() not in ("Darwin", "Linux"):
-                return False
-            print("  Ollama not found. Installing...", file=sys.stderr)
-            try:
-                subprocess.run(
-                    ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"],
-                    check=True, timeout=120,
-                )
-                print("  Ollama installed.", file=sys.stderr)
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-                return False
-
-        # Start ollama serve in the background
-        try:
-            subprocess.Popen(
-                ["ollama", "serve"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            # Wait for server to be ready
-            for _ in range(10):
-                time.sleep(1)
-                try:
-                    req = urllib.request.Request(f"{self._host}/api/tags")
-                    with urllib.request.urlopen(req, timeout=3):
-                        print("  Ollama is running.", file=sys.stderr)
-                        return True
-                except Exception:
-                    continue
-        except FileNotFoundError:
-            pass
-        return False
 
     def _check_model(self):
         """Pull the model if not already available."""
@@ -568,7 +553,10 @@ class OllamaBackend(Backend):
             "Use frame-by-frame mode instead."
         )
 
-    def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+    def analyze_audio(
+        self, audio_path: str, prompt: str, verbose: bool = False,
+        min_confidence: float = 0.4,
+    ) -> str:
         # Ollama doesn't support audio. The orchestrator skips audio for Ollama.
         raise AnalysisError(
             "Ollama does not support audio analysis. "
@@ -609,6 +597,136 @@ class OllamaBackend(Backend):
 
 
 # ---------------------------------------------------------------------------
+# eyeroll hosted API backend
+# ---------------------------------------------------------------------------
+
+class EyerollAPIBackend(Backend):
+    """Routes analysis requests to the eyeroll hosted API.
+
+    Used automatically when EYEROLL_API_KEY is set in the environment.
+    The server handles backend selection and AI calls; the client just
+    sends the source URL/path and receives the report.
+    """
+
+    def __init__(self):
+        self._api_key = os.environ.get("EYEROLL_API_KEY")
+        self._api_url = os.environ.get("EYEROLL_API_URL", "https://api.eyeroll.dev").rstrip("/")
+        if not self._api_key:
+            raise AnalysisError(
+                "EYEROLL_API_KEY is not set. "
+                "Get a free key at https://api.eyeroll.dev or run `eyeroll init`."
+            )
+
+    @property
+    def supports_video(self) -> bool:
+        return False  # server handles strategy internally
+
+    @property
+    def supports_audio(self) -> bool:
+        return False
+
+    def analyze_image(self, image_path: str, prompt: str, verbose: bool = False) -> str:
+        raise NotImplementedError("Use the watch() pipeline, not analyze_image() directly.")
+
+    def analyze_video(self, video_path: str, prompt: str, verbose: bool = False) -> str:
+        raise NotImplementedError("Use the watch() pipeline, not analyze_video() directly.")
+
+    def analyze_audio(self, audio_path: str, prompt: str, verbose: bool = False) -> str:
+        raise NotImplementedError("Use the watch() pipeline, not analyze_audio() directly.")
+
+    def generate(self, prompt: str, verbose: bool = False) -> str:
+        raise NotImplementedError("Use the watch() pipeline, not generate() directly.")
+
+    def watch(self, source: str, context: str | None = None, max_frames: int = 20) -> str:
+        """Send a watch request to the hosted API and return the report.
+
+        Local files are uploaded as multipart form data.
+        URLs are sent as JSON.
+        """
+        import urllib.request
+        import json as _json
+
+        is_local = os.path.isfile(source)
+
+        if is_local:
+            # Multipart upload for local files
+            import mimetypes
+            import uuid as _uuid
+
+            boundary = _uuid.uuid4().hex
+            filename = os.path.basename(source)
+            mime_type = mimetypes.guess_type(source)[0] or "application/octet-stream"
+
+            parts = []
+            # File part
+            with open(source, "rb") as f:
+                file_data = f.read()
+            parts.append(
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+                f"Content-Type: {mime_type}\r\n\r\n"
+            )
+            parts_bytes = parts[0].encode() + file_data + b"\r\n"
+
+            # Text fields
+            for field, value in [("context", context), ("max_frames", str(max_frames))]:
+                if value is not None:
+                    parts_bytes += (
+                        f"--{boundary}\r\n"
+                        f'Content-Disposition: form-data; name="{field}"\r\n\r\n'
+                        f"{value}\r\n"
+                    ).encode()
+
+            parts_bytes += f"--{boundary}--\r\n".encode()
+
+            req = urllib.request.Request(
+                f"{self._api_url}/api/watch",
+                data=parts_bytes,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": f"multipart/form-data; boundary={boundary}",
+                },
+                method="POST",
+            )
+        else:
+            # JSON for URLs
+            payload = _json.dumps({"source": source, "context": context, "max_frames": max_frames}).encode()
+            req = urllib.request.Request(
+                f"{self._api_url}/api/watch",
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+
+        try:
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                data = _json.loads(resp.read())
+                return data["report"]
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            try:
+                detail = _json.loads(body).get("detail", body)
+            except Exception:
+                detail = body
+            raise AnalysisError(f"eyeroll API error {exc.code}: {detail}") from exc
+
+    def preflight(self) -> dict:
+        return {
+            "healthy": True,
+            "error": None,
+            "capabilities": {
+                "video_upload": False,
+                "batch_frames": False,
+                "audio": False,
+                "max_video_mb": None,
+            },
+        }
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
@@ -620,8 +738,9 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
 
     Args:
         name: Backend name. One of: 'gemini', 'openai', 'ollama', 'openrouter', 'groq',
-              'grok', 'cerebras', 'openai-compat'.
-              Defaults to EYEROLL_BACKEND env var, then 'gemini'.
+              'grok', 'cerebras', 'openai-compat', 'eyeroll-api'.
+              Defaults to EYEROLL_BACKEND env var, then 'eyeroll-api' if EYEROLL_API_KEY
+              is set, otherwise 'gemini'.
         **kwargs: Passed to backend constructor (e.g., model, host, base_url).
     """
     global _current_backend
@@ -629,7 +748,9 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
         return _current_backend
 
     if name is None:
-        name = os.environ.get("EYEROLL_BACKEND", "gemini")
+        name = os.environ.get("EYEROLL_BACKEND")
+        if name is None:
+            name = "eyeroll-api" if os.environ.get("EYEROLL_API_KEY") else "gemini"
 
     if name == "gemini":
         _current_backend = GeminiBackend(**kwargs)
@@ -637,6 +758,8 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
         _current_backend = OpenAIBackend(**kwargs)
     elif name == "ollama":
         _current_backend = OllamaBackend(**kwargs)
+    elif name == "eyeroll-api":
+        _current_backend = EyerollAPIBackend()
     elif name in _OPENAI_COMPAT_PROVIDERS:
         url, key_env, default_model, has_whisper = _OPENAI_COMPAT_PROVIDERS[name]
         _current_backend = OpenAIBackend(
@@ -651,7 +774,7 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
     else:
         raise ValueError(
             f"Unknown backend: {name}. "
-            "Use 'gemini', 'openai', 'ollama', 'openrouter', 'groq', 'grok', "
+            "Use 'gemini', 'openai', 'ollama', 'eyeroll-api', 'openrouter', 'groq', 'grok', "
             "'cerebras', or 'openai-compat'."
         )
 

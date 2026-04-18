@@ -85,16 +85,38 @@ def has_audio_track(video_path: str) -> bool:
 MIN_SIZE_DELTA = 5000
 
 
+def _pixel_diff(path_a: str, path_b: str) -> float:
+    """Compute mean pixel difference between two images using PIL.
+
+    Returns a value on 0-255 scale. Higher = more different.
+    """
+    from PIL import Image
+    import struct
+
+    img_a = Image.open(path_a).convert("L").resize((160, 90))
+    img_b = Image.open(path_b).convert("L").resize((160, 90))
+
+    bytes_a = img_a.tobytes()
+    bytes_b = img_b.tobytes()
+
+    total = sum(abs(a - b) for a, b in zip(bytes_a, bytes_b))
+    return total / len(bytes_a)
+
+
 def extract_key_frames(
     video_path: str,
     max_frames: int = 20,
     output_dir: str | None = None,
     enhance: bool = True,
+    scene_threshold: float = 0.0,
 ) -> list[dict]:
     """Extract key frames from a video.
 
-    Extracts 1 frame every 2 seconds, removes near-duplicates,
-    and optionally enhances contrast for better text readability.
+    When scene_threshold > 0, uses pixel-diff scene-change detection to pick
+    frames at visual transitions. When scene_threshold == 0 (default), uses
+    fixed-interval extraction (1 frame every 2 seconds) with size-based dedup.
+
+    In both modes, near-duplicate frames are removed and contrast is enhanced.
 
     Returns list of dicts with keys: frame_path, timestamp, frame_index.
     """
@@ -104,7 +126,7 @@ def extract_key_frames(
     if output_dir is None:
         output_dir = tempfile.mkdtemp(prefix="eyeroll_frames_")
 
-    # Step 1: Extract 1 frame every 2 seconds
+    # Step 1: Extract candidate frames at fixed intervals
     interval = 2.0
     num_candidates = max(1, int(duration / interval))
     candidates = []
@@ -134,14 +156,27 @@ def extract_key_frames(
     if not candidates:
         return []
 
-    # Step 2: Remove near-duplicate frames
-    # Keep a frame if its file size differs enough from the previous kept frame.
-    # JPEG size is a rough proxy for visual content — similar screens compress similarly.
-    kept = [candidates[0]]  # always keep first frame
-    for c in candidates[1:]:
-        size_delta = abs(c["size"] - kept[-1]["size"])
-        if size_delta > MIN_SIZE_DELTA:
-            kept.append(c)
+    # Step 2: Select frames — scene-change detection or size-based dedup
+    use_scene_detection = scene_threshold > 0 and len(candidates) > 1
+    if use_scene_detection:
+        try:
+            # Scene-change detection: keep frames where pixel diff exceeds threshold
+            kept = [candidates[0]]  # always keep first frame
+            for c in candidates[1:]:
+                diff = _pixel_diff(kept[-1]["frame_path"], c["frame_path"])
+                if diff >= scene_threshold:
+                    kept.append(c)
+        except Exception:
+            # PIL can't read frames — fall back to size-based dedup
+            use_scene_detection = False
+
+    if not use_scene_detection:
+        # Fixed-interval fallback: remove near-duplicates by JPEG file size
+        kept = [candidates[0]]  # always keep first frame
+        for c in candidates[1:]:
+            size_delta = abs(c["size"] - kept[-1]["size"])
+            if size_delta > MIN_SIZE_DELTA:
+                kept.append(c)
 
     # Always keep the last frame (often shows the final state / error)
     if len(candidates) > 1 and kept[-1] is not candidates[-1]:

@@ -278,13 +278,14 @@ def test_watch_passes_codebase_context(tmp_image_path):
 
 
 def test_watch_works_without_codebase_context(tmp_image_path):
-    """watch() works fine when no codebase context is provided."""
+    """watch() works fine when no codebase context is found."""
     mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
 
     with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
          patch("eyeroll.watch.reset_backend"), \
          patch("eyeroll.watch._cache_load", return_value=None), \
          patch("eyeroll.watch._cache_save"), \
+         patch("eyeroll.context.discover_context", return_value=None), \
          patch("eyeroll.watch.analyze_frames", return_value=[
              {"frame_index": 0, "timestamp": 0.0, "analysis": "test"}
          ]), \
@@ -292,6 +293,63 @@ def test_watch_works_without_codebase_context(tmp_image_path):
         result = watch(tmp_image_path)
 
     assert "# eyeroll:" in result
+    assert mock_sr.call_args[1]["codebase_context"] is None
+
+
+def test_watch_auto_discovers_context(tmp_image_path):
+    """watch() auto-discovers context when not explicitly provided."""
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
+         patch("eyeroll.context.discover_context", return_value="# Auto context") as mock_dc, \
+         patch("eyeroll.watch.analyze_frames", return_value=[
+             {"frame_index": 0, "timestamp": 0.0, "analysis": "test"}
+         ]), \
+         patch("eyeroll.watch.synthesize_report", return_value="## Report") as mock_sr:
+        watch(tmp_image_path)
+
+    mock_dc.assert_called_once()
+    assert mock_sr.call_args[1]["codebase_context"] == "# Auto context"
+
+
+def test_watch_explicit_cc_overrides_discovery(tmp_image_path):
+    """Explicit codebase_context skips auto-discovery."""
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
+         patch("eyeroll.context.discover_context") as mock_dc, \
+         patch("eyeroll.watch.analyze_frames", return_value=[
+             {"frame_index": 0, "timestamp": 0.0, "analysis": "test"}
+         ]), \
+         patch("eyeroll.watch.synthesize_report", return_value="## Report") as mock_sr:
+        watch(tmp_image_path, codebase_context="explicit context")
+
+    mock_dc.assert_not_called()
+    assert mock_sr.call_args[1]["codebase_context"] == "explicit context"
+
+
+def test_watch_no_context_skips_discovery(tmp_image_path):
+    """no_context=True skips auto-discovery entirely."""
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=True)
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save"), \
+         patch("eyeroll.context.discover_context") as mock_dc, \
+         patch("eyeroll.watch.analyze_frames", return_value=[
+             {"frame_index": 0, "timestamp": 0.0, "analysis": "test"}
+         ]), \
+         patch("eyeroll.watch.synthesize_report", return_value="## Report") as mock_sr:
+        watch(tmp_image_path, no_context=True)
+
+    mock_dc.assert_not_called()
     assert mock_sr.call_args[1]["codebase_context"] is None
 
 
@@ -312,10 +370,15 @@ def test_cache_key_differs_by_backend(tmp_image_path):
     assert k1 != k2
 
 
-def test_cache_key_url():
-    """URLs produce a stable key without file I/O."""
-    k = _cache_key("https://loom.com/share/abc123", "gemini", None)
-    assert len(k) == 16
+def test_cache_key_different_content(tmp_path):
+    """Different file content produces different cache keys."""
+    f1 = tmp_path / "a.mp4"
+    f2 = tmp_path / "b.mp4"
+    f1.write_bytes(b"\x00" * 100)
+    f2.write_bytes(b"\xff" * 100)
+    k1 = _cache_key(str(f1), "gemini", None)
+    k2 = _cache_key(str(f2), "gemini", None)
+    assert k1 != k2
 
 
 def test_cache_save_and_load(tmp_path):
@@ -339,8 +402,31 @@ def test_cache_save_and_load(tmp_path):
 
 
 def test_cache_load_miss(tmp_path):
-    with patch("eyeroll.watch.CACHE_DIR", str(tmp_path)):
+    with patch("eyeroll.watch.CACHE_DIR", str(tmp_path)), \
+         patch("eyeroll.watch.LOCAL_CACHE_DIR", str(tmp_path / "nonexistent")):
         assert _cache_load("nonexistent") is None
+
+
+def test_cache_load_legacy_fallback(tmp_path):
+    """Falls back to legacy local cache when global cache misses."""
+    global_dir = tmp_path / "global"
+    local_dir = tmp_path / "local"
+    local_dir.mkdir()
+
+    # Write entry to legacy local cache
+    import json
+    entry = {"key": "testkey", "media_type": "video", "title": "legacy",
+             "timestamp": "2024-01-01T00:00:00+00:00", "source": "v.mp4",
+             "frame_analyses": None, "video_analysis": None, "transcript": None}
+    with open(local_dir / "testkey.json", "w") as f:
+        json.dump(entry, f)
+
+    with patch("eyeroll.watch.CACHE_DIR", str(global_dir)), \
+         patch("eyeroll.watch.LOCAL_CACHE_DIR", str(local_dir)):
+        result = _cache_load("testkey")
+
+    assert result is not None
+    assert result["title"] == "legacy"
 
 
 def test_watch_returns_cached_report(tmp_image_path):

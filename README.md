@@ -19,7 +19,7 @@ eyeroll is a Claude Code plugin that analyzes screen recordings, Loom videos, Yo
 # Install the CLI
 pip install eyeroll[gemini]      # Gemini Flash API (recommended)
 pip install eyeroll[openai]      # OpenAI GPT-4o + OpenRouter/Groq/Grok/Cerebras
-pip install eyeroll              # Ollama only (local, no API key)
+pip install eyeroll              # Ollama only (local, no API key) — requires Pillow
 pip install eyeroll[all]         # everything
 ```
 
@@ -68,6 +68,10 @@ eyeroll watch ./bug.mp4 --backend ollama -m qwen3-vl:2b
 eyeroll watch ./bug.mp4 --backend groq
 eyeroll watch ./bug.mp4 --backend openrouter -m anthropic/claude-3.5-sonnet
 eyeroll watch ./bug.mp4 --backend openai-compat --base-url https://my-server/v1
+eyeroll watch ./bug.mp4 --no-context               # skip auto-discovery of codebase context
+eyeroll watch ./bug.mp4 --no-cost                   # suppress cost estimate
+eyeroll watch ./bug.mp4 --scene-threshold 50        # tune scene-change sensitivity
+eyeroll watch ./bug.mp4 --min-audio-confidence 0.6  # stricter audio filtering
 eyeroll history
 ```
 
@@ -106,7 +110,7 @@ eyeroll history
 
 | Backend | Strategy | Audio | API Key | Cost | Best for |
 |---------|----------|-------|---------|------|----------|
-| **gemini** | Direct upload (up to 2GB) | Yes | GEMINI_API_KEY | ~$0.15 | Best quality |
+| **gemini** | Direct upload (up to 2GB) | Yes | GEMINI_API_KEY | ~$0.15 | Best quality (gemini-2.5-flash) |
 | **openai** | Multi-frame batch | Whisper | OPENAI_API_KEY | ~$0.20 | Existing OpenAI users |
 | **ollama** | Frame-by-frame | No | None | Free | Privacy, offline |
 | **openrouter** | Multi-frame batch | No | OPENROUTER_API_KEY | varies | Model variety |
@@ -119,19 +123,23 @@ Ollama auto-installs if not found (macOS/Linux).
 
 ## Codebase context
 
-`/eyeroll:init` generates `.eyeroll/context.md` — a summary of your project that eyeroll uses to ground its analysis in real file paths instead of hallucinating them.
+eyeroll automatically discovers codebase context from files like `CLAUDE.md`, `AGENTS.md`, `CURSOR.md`, and `.eyeroll/context.md` (disable with `--no-context`). You can also run `/eyeroll:init` to generate `.eyeroll/context.md` manually.
 
 Without context, all file paths in the report are labeled as hypotheses.
 
 ## Caching
 
-eyeroll caches frame analyses and transcripts in `.eyeroll/cache/`. Same video = no re-analysis. Different `--context` re-runs only the cheap synthesis step.
+eyeroll caches frame analyses and transcripts in `~/.eyeroll/cache/` (global). Same video = no re-analysis. Different `--context` re-runs only the cheap synthesis step. Legacy local `.eyeroll/cache/` is still checked for backward compatibility.
 
 ```bash
 eyeroll watch video.mp4                    # full analysis (~15s)
 eyeroll watch video.mp4 -c "new context"   # instant — cached frames
 eyeroll watch video.mp4 --no-cache         # force fresh
 ```
+
+## Cost estimates
+
+eyeroll prints a cost estimate to stderr after each analysis. Disable with `--no-cost`. Ollama runs are always free.
 
 ## Plugin structure
 
@@ -145,7 +153,7 @@ eyeroll/
   skills/                ← background skills
     video-to-skill/      ← activated by "create a skill from this video"
   eyeroll/               ← Python CLI package
-    cli.py, watch.py, analyze.py, extract.py, backend.py, history.py
+    cli.py, watch.py, analyze.py, extract.py, backend.py, context.py, cost.py, history.py
   tests/                 ← 269 unit + 8 integration tests
 ```
 

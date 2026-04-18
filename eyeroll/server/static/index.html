@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>eyeroll — AI eyes for your videos</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080808;
+      --surface: #111;
+      --border: #222;
+      --text: #e8e8e8;
+      --muted: #666;
+      --accent: #fff;
+      --code-bg: #0d0d0d;
+      --green: #4ade80;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* Layout */
+    .wrap {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Nav */
+    nav {
+      padding: 28px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+      color: var(--accent);
+    }
+    .nav-link {
+      font-size: 13px;
+      color: var(--muted);
+      transition: color 0.15s;
+    }
+    .nav-link:hover { color: var(--text); }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 64px;
+    }
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: clamp(36px, 6vw, 56px);
+      font-weight: 700;
+      letter-spacing: -1.5px;
+      line-height: 1.08;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+    .tagline {
+      font-size: 18px;
+      color: var(--muted);
+      max-width: 480px;
+      line-height: 1.5;
+      margin-bottom: 44px;
+    }
+
+    /* Signup form */
+    .signup-form {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .signup-form input[type="email"] {
+      flex: 1;
+      min-width: 240px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      padding: 12px 16px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .signup-form input[type="email"]:focus { border-color: #444; }
+    .signup-form input[type="email"]::placeholder { color: var(--muted); }
+    .btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 22px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.45; cursor: default; }
+
+    /* Key result */
+    .key-result {
+      display: none;
+      margin-top: 20px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+    .key-result.show { display: block; }
+    .key-label {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .key-value {
+      font-family: "SF Mono", "Fira Code", Menlo, monospace;
+      font-size: 14px;
+      color: var(--green);
+      word-break: break-all;
+    }
+    .key-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    /* Divider */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 64px 0;
+    }
+
+    /* Section */
+    .section-label {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+
+    /* Steps */
+    .steps { display: flex; flex-direction: column; gap: 40px; }
+    .step { display: flex; gap: 20px; align-items: flex-start; }
+    .step-num {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: "SF Mono", "Fira Code", Menlo, monospace;
+      padding-top: 3px;
+      min-width: 24px;
+    }
+    .step-body { flex: 1; }
+    .step-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .step-desc {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    /* Code block */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      overflow-x: auto;
+      font-family: "SF Mono", "Fira Code", Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #ccc;
+    }
+    .token-comment { color: var(--muted); }
+    .token-key { color: #93c5fd; }
+    .token-val { color: var(--green); }
+    .token-cmd { color: #fde68a; }
+
+    /* Skills */
+    .skills { display: flex; flex-direction: column; gap: 16px; }
+    .skill-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+    .skill-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 4px;
+      font-family: "SF Mono", "Fira Code", Menlo, monospace;
+    }
+    .skill-desc {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* Footer */
+    footer {
+      padding: 48px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .footer-note { font-size: 13px; color: var(--muted); }
+    .footer-links { display: flex; gap: 20px; }
+    .footer-links a { font-size: 13px; color: var(--muted); transition: color 0.15s; }
+    .footer-links a:hover { color: var(--text); }
+
+    /* Error */
+    .error-msg {
+      display: none;
+      font-size: 13px;
+      color: #f87171;
+      margin-top: 10px;
+    }
+    .error-msg.show { display: block; }
+
+    /* Try it section */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #444;
+      background: var(--surface);
+    }
+    .drop-zone .drop-text {
+      font-size: 15px;
+      color: var(--muted);
+    }
+
+    .try-progress {
+      text-align: center;
+      padding: 40px 0;
+    }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      margin: 0 auto 16px;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .try-result {
+      margin-top: 20px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .report-content {
+      font-family: "SF Mono", "Fira Code", Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- Nav -->
+    <nav>
+      <span class="logo">eyeroll</span>
+      <a class="nav-link" href="https://github.com/mnvsk97/eyeroll" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+      <p class="eyebrow">Open beta · Free</p>
+      <h1>AI eyes for<br>your videos</h1>
+      <p class="tagline">
+        Drop a Loom, YouTube link, or local video. Get structured notes
+        your coding agent can act on — fix bugs, build features, create skills.
+      </p>
+
+      <!-- Signup -->
+      <form class="signup-form" id="signupForm">
+        <input type="email" id="emailInput" placeholder="you@example.com" required autocomplete="email">
+        <button class="btn" type="submit" id="signupBtn">Get free API key →</button>
+      </form>
+      <p class="error-msg" id="signupError"></p>
+
+      <div class="key-result" id="keyResult">
+        <p class="key-label">Your API key</p>
+        <p class="key-value" id="keyValue"></p>
+        <p class="key-hint">Save this — it won't be shown again. Set <code>EYEROLL_API_KEY</code> in your env.</p>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Try it -->
+    <section id="try">
+      <p class="section-label">Try it — no login needed</p>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:24px;">
+        Upload a video or paste a URL. 3 free analyses per day.
+      </p>
+
+      <div class="try-form" id="tryForm">
+        <!-- URL input -->
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+          <input type="text" id="tryUrl" placeholder="https://loom.com/share/... or YouTube URL"
+                 style="flex:1;min-width:240px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:12px 16px;outline:none;">
+          <button class="btn" id="tryUrlBtn" onclick="submitUrl()">Analyze URL</button>
+        </div>
+
+        <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">— or —</p>
+
+        <!-- Drop zone -->
+        <div id="dropZone" class="drop-zone">
+          <p class="drop-text">Drop a video or image here, or <label for="fileInput" style="color:var(--accent);cursor:pointer;text-decoration:underline;">browse</label></p>
+          <p style="font-size:12px;color:var(--muted);margin-top:8px;">MP4, MOV, WebM, PNG, JPG — up to 500MB</p>
+          <input type="file" id="fileInput" accept="video/*,image/*" style="display:none;">
+        </div>
+
+        <!-- Optional context -->
+        <div style="margin-top:16px;">
+          <input type="text" id="tryContext" placeholder="Optional context: 'bug after PR #42', 'checkout flow broken'"
+                 style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:12px 16px;outline:none;">
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div id="tryProgress" class="try-progress" style="display:none;">
+        <div class="spinner"></div>
+        <p id="tryStatus" style="font-size:14px;color:var(--muted);">Analyzing...</p>
+      </div>
+
+      <!-- Result -->
+      <div id="tryResult" class="try-result" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <p class="key-label" style="margin:0;">Report</p>
+          <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="copyReport()">Copy</button>
+        </div>
+        <div id="tryReport" class="report-content"></div>
+      </div>
+
+      <!-- Error -->
+      <p class="error-msg" id="tryError"></p>
+    </section>
+
+    <hr class="divider">
+
+    <!-- How it works -->
+    <section>
+      <p class="section-label">How it works</p>
+      <div class="steps">
+
+        <div class="step">
+          <span class="step-num">01</span>
+          <div class="step-body">
+            <p class="step-title">Get your key</p>
+            <p class="step-desc">Enter your email above. Your API key is issued instantly.</p>
+            <pre><span class="token-comment"># or via curl</span>
+curl -s -X POST https://api.eyeroll.dev/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com"}'</pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">02</span>
+          <div class="step-body">
+            <p class="step-title">Set your key</p>
+            <p class="step-desc">Add it to your shell or project <code>.env</code>.</p>
+            <pre><span class="token-key">export EYEROLL_API_KEY</span>=<span class="token-val">er_your_key_here</span>
+<span class="token-key">export EYEROLL_API_URL</span>=<span class="token-val">https://api.eyeroll.dev</span></pre>
+          </div>
+        </div>
+
+        <div class="step">
+          <span class="step-num">03</span>
+          <div class="step-body">
+            <p class="step-title">Watch</p>
+            <p class="step-desc">
+              Run via the CLI or send a raw HTTP request. No Gemini or OpenAI key needed.
+            </p>
+            <pre><span class="token-comment"># CLI (auto-routes when EYEROLL_API_KEY is set)</span>
+<span class="token-cmd">eyeroll watch</span> https://loom.com/share/abc123
+<span class="token-cmd">eyeroll watch</span> ./recording.mp4 --context "checkout broken"
+
+<span class="token-comment"># or raw HTTP</span>
+curl -s -X POST https://api.eyeroll.dev/api/watch \
+  -H "Authorization: Bearer $EYEROLL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"source":"https://loom.com/share/abc123"}'</pre>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Skills -->
+    <section>
+      <p class="section-label">Claude Code skills</p>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:24px;">
+        Once your key is set, these slash commands work inside Claude Code sessions.
+      </p>
+      <div class="skills">
+        <div class="skill-card">
+          <p class="skill-name">/eyeroll:api-watch &lt;url&gt;</p>
+          <p class="skill-desc">Analyze a video URL via the hosted API. Returns a structured report.</p>
+        </div>
+        <div class="skill-card">
+          <p class="skill-name">/eyeroll:api-usage</p>
+          <p class="skill-desc">Check how many analyses you've used today and when the limit resets.</p>
+        </div>
+        <div class="skill-card">
+          <p class="skill-name">/eyeroll:api-rotate-key</p>
+          <p class="skill-desc">Rotate your API key. Old key is immediately invalidated.</p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Footer -->
+    <footer>
+      <p class="footer-note">20 free analyses per day</p>
+      <div class="footer-links">
+        <a href="https://github.com/mnvsk97/eyeroll" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/mnvsk97/eyeroll/issues" target="_blank" rel="noopener">Issues</a>
+      </div>
+    </footer>
+
+  </div>
+
+  <script>
+    /* ---- Try it ---- */
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const tryError = document.getElementById('tryError');
+    const tryProgress = document.getElementById('tryProgress');
+    const tryStatus = document.getElementById('tryStatus');
+    const tryResult = document.getElementById('tryResult');
+    const tryReport = document.getElementById('tryReport');
+    let _reportText = '';
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) submitFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files.length) submitFile(fileInput.files[0]); });
+
+    let _queuePoll = null;
+
+    function showTryProgress(msg) {
+      tryError.classList.remove('show');
+      tryResult.style.display = 'none';
+      tryProgress.style.display = 'block';
+      tryStatus.textContent = msg || 'Analyzing...';
+      startQueuePoll();
+    }
+    function showTryError(msg) {
+      tryProgress.style.display = 'none';
+      tryError.textContent = msg;
+      tryError.classList.add('show');
+      stopQueuePoll();
+    }
+    function showTryResult(report) {
+      tryProgress.style.display = 'none';
+      _reportText = report;
+      tryReport.textContent = report;
+      tryResult.style.display = 'block';
+      stopQueuePoll();
+    }
+
+    function startQueuePoll() {
+      stopQueuePoll();
+      _queuePoll = setInterval(async () => {
+        try {
+          const r = await fetch('/api/queue');
+          const q = await r.json();
+          let msg = 'Analyzing — this may take a minute...';
+          if (q.waiting > 0) msg = `Queued (${q.waiting} ahead of you)... ${q.active}/${q.max_concurrent} slots busy`;
+          else if (q.active >= q.max_concurrent) msg = `Processing... all ${q.max_concurrent} slots busy`;
+          tryStatus.textContent = msg;
+        } catch {}
+      }, 3000);
+    }
+    function stopQueuePoll() {
+      if (_queuePoll) { clearInterval(_queuePoll); _queuePoll = null; }
+    }
+
+    async function submitFile(file) {
+      showTryProgress(`Uploading ${file.name}...`);
+      const fd = new FormData();
+      fd.append('file', file);
+      const ctx = document.getElementById('tryContext').value.trim();
+      if (ctx) fd.append('context', ctx);
+
+      try {
+        const res = await fetch('/api/try', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Analysis failed.');
+        showTryResult(data.report);
+      } catch (err) {
+        showTryError(err.message);
+      }
+    }
+
+    async function submitUrl() {
+      const url = document.getElementById('tryUrl').value.trim();
+      if (!url) return;
+      showTryProgress('Analyzing URL...');
+      const ctx = document.getElementById('tryContext').value.trim();
+
+      try {
+        const res = await fetch('/api/try', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: url, context: ctx || null }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Analysis failed.');
+        showTryResult(data.report);
+      } catch (err) {
+        showTryError(err.message);
+      }
+    }
+
+    function copyReport() {
+      navigator.clipboard.writeText(_reportText).catch(() => {});
+    }
+
+    /* ---- Signup ---- */
+    const form = document.getElementById('signupForm');
+    const btn = document.getElementById('signupBtn');
+    const keyResult = document.getElementById('keyResult');
+    const keyValue = document.getElementById('keyValue');
+    const errorMsg = document.getElementById('signupError');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('emailInput').value.trim();
+      if (!email) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Getting key…';
+      errorMsg.classList.remove('show');
+      keyResult.classList.remove('show');
+
+      try {
+        const res = await fetch('/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Something went wrong.');
+        keyValue.textContent = data.api_key;
+        keyResult.classList.add('show');
+        btn.textContent = 'Done ✓';
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = 'Get free API key →';
+      }
+    });
+  </script>
+</body>
+</html>

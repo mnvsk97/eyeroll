@@ -4,7 +4,7 @@ import json
 import os
 import glob
 
-CACHE_DIR = os.path.join(".eyeroll", "cache")
+CACHE_DIR = os.path.join(os.path.expanduser("~"), ".eyeroll", "cache")
 
 
 def list_history(limit: int | None = None) -> list[dict]:

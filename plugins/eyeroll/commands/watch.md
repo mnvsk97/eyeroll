@@ -9,24 +9,22 @@ Analyze a video or screenshot with eyeroll and present the findings.
 Raw arguments:
 `$ARGUMENTS`
 
-## Step 1: Check prerequisites
+## Step 1: Run eyeroll
 
-If `.eyeroll/context.md` does not exist, tell the user to run `/eyeroll:init` first, then continue anyway.
-
-## Step 2: Run eyeroll
+Codebase context is auto-discovered from CLAUDE.md, AGENTS.md, .cursorrules, etc.
 
 ```bash
-eyeroll watch $ARGUMENTS --codebase-context .eyeroll/context.md --verbose
+eyeroll watch $ARGUMENTS --verbose
 ```
 
 If the user didn't pass `--context` / `-c` but mentioned something about the video in conversation, add it:
 ```bash
-eyeroll watch <source> -c "<what the user said>" -cc .eyeroll/context.md --verbose
+eyeroll watch <source> -c "<what the user said>" --verbose
 ```
 
 If eyeroll is not installed, tell the user to run `/eyeroll:init`.
 
-## Step 3: Present the report
+## Step 2: Present the report
 
 Read the output. First, check the **Metadata** block at the top for quick triage:
 

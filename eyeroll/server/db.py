@@ -67,28 +67,22 @@ def _new_key() -> str:
 # Users
 # ---------------------------------------------------------------------------
 
-async def create_user(pool: asyncpg.Pool, email: str) -> tuple[dict, dict]:
-    """Create a new user with a default key, or return existing user + all their keys.
+async def create_user(pool: asyncpg.Pool, email: str) -> tuple[dict, bool]:
+    """Create a new user with a default key, or signal that the email is taken.
 
-    Returns (user_row, first_key_row).
-    For new users the first_key_row is the freshly created default key.
-    For existing users the first_key_row is their oldest key.
+    Returns (key_row, is_new).
+    For new users: key_row is the freshly created default key, is_new=True.
+    For existing users: key_row is empty, is_new=False (key is NOT exposed).
     """
     async with pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT id, email FROM users WHERE email = $1", email)
+        user = await conn.fetchrow("SELECT id FROM users WHERE email = $1", email)
         if user:
-            # Return existing user + their oldest key
-            key_row = await conn.fetchrow(
-                "SELECT id, key, name, created_at FROM api_keys "
-                "WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1",
-                user["id"],
-            )
-            return dict(user), dict(key_row) if key_row else {}
+            return {}, False
 
         uid = str(uuid.uuid4())
         await conn.execute("INSERT INTO users (id, email) VALUES ($1, $2)", uid, email)
         key_row = await _insert_key(conn, uid, "default")
-        return {"id": uid, "email": email}, key_row
+        return key_row, True
 
 
 async def _insert_key(conn, user_id: str, name: str) -> dict:

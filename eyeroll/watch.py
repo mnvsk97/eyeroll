@@ -39,7 +39,11 @@ def watch(
     base_url: str | None = None,
     verbose: bool = False,
     no_cache: bool = False,
+    no_context: bool = False,
     parallel: int = 1,
+    min_audio_confidence: float = 0.4,
+    scene_threshold: float = 30.0,
+    no_cost: bool = False,
 ) -> str:
     """Full pipeline: acquire media -> extract -> analyze -> report.
 
@@ -47,14 +51,19 @@ def watch(
         source: URL or local file path to video/image.
         context: Optional text context (Slack message, issue body, etc.)
         codebase_context: Optional codebase context (project structure, stack, key files).
+                          If None and no_context is False, auto-discovers from CLAUDE.md, etc.
         max_frames: Maximum number of key frames to extract and analyze.
         backend_name: Backend name (e.g. 'gemini', 'openai', 'groq', 'openai-compat').
                       Defaults to EYEROLL_BACKEND env var, then 'gemini'.
-        model: Model override (e.g., 'qwen3-vl:8b' for ollama, 'gemini-2.0-flash' for gemini).
+        model: Model override (e.g., 'qwen3-vl:8b' for ollama, 'gemini-2.5-flash' for gemini).
         base_url: Base URL for openai-compat backend (e.g. https://my-server/v1).
         verbose: Print progress to stderr.
         no_cache: Skip cache lookup and force fresh analysis.
+        no_context: Skip auto-discovery of codebase context.
         parallel: Number of concurrent workers for frame analysis (default: 1 = sequential).
+        min_audio_confidence: Minimum confidence for Whisper segments (default: 0.4).
+        scene_threshold: Pixel-diff threshold for scene-change detection (default: 30.0, 0=fixed interval).
+        no_cost: Suppress cost estimate output.
 
     Returns:
         Markdown-formatted report.
@@ -78,13 +87,23 @@ def watch(
     if isinstance(backend, EyerollAPIBackend):
         if verbose:
             print(f"Backend: eyeroll-api (hosted)", file=sys.stderr)
-        return backend.watch(source=source, context=context, max_frames=max_frames)
+        try:
+            return backend.watch(source=source, context=context, max_frames=max_frames)
+        finally:
+            reset_backend()
 
     # Preflight: verify backend is reachable and discover capabilities
     from .backend import AnalysisError
     flight = backend.preflight()
     if not flight["healthy"]:
         raise AnalysisError(f"Backend {backend_label} is not reachable: {flight['error']}")
+
+    # Auto-discover codebase context if not explicitly provided
+    if codebase_context is None and not no_context:
+        from .context import discover_context
+        codebase_context = discover_context()
+        if verbose and codebase_context:
+            print("  Auto-discovered codebase context", file=sys.stderr)
 
     if verbose:
         print(f"Backend: {backend_label}", file=sys.stderr)
@@ -96,23 +115,32 @@ def watch(
         if codebase_context:
             print("  Codebase context provided", file=sys.stderr)
 
-    # Check cache for intermediate results
-    cache_key = _cache_key(source, backend_label, model)
-    if not no_cache:
-        cached = _cache_load(cache_key)
+    # Cache: local files check before acquire, URLs check after download
+    is_url = source.startswith("http://") or source.startswith("https://")
+    cache_key = None
+
+    def _try_cache(fp):
+        """Check cache, return (report, cache_key) or (None, cache_key)."""
+        ck = _cache_key(fp, backend_label, model, scene_threshold)
+        if no_cache:
+            return None, ck
+        cached = _cache_load(ck)
         if cached:
             if verbose:
-                print("  Cache hit — reusing cached analysis, re-running synthesis", file=sys.stderr)
-            # Re-run synthesis with current context/codebase_context
-            report = synthesize_report(
+                print("  Cache hit — re-running synthesis", file=sys.stderr)
+            rpt = synthesize_report(
                 frame_analyses=cached.get("frame_analyses"),
                 video_analysis=cached.get("video_analysis"),
                 transcript=cached.get("transcript"),
-                context=context,
-                codebase_context=codebase_context,
-                verbose=verbose,
+                context=context, codebase_context=codebase_context, verbose=verbose,
             )
-            return _wrap_report(report, cached["title"], cached["media_type"], context, backend_label)
+            return _wrap_report(rpt, cached["title"], cached["media_type"], context, backend_label), ck
+        return None, ck
+
+    if not is_url:
+        hit, cache_key = _try_cache(source)
+        if hit:
+            return hit
 
     # Step 1: Acquire
     if verbose:
@@ -124,9 +152,20 @@ def watch(
     title = media["title"]
 
     if verbose:
-        print(f"  Media type: {media_type}", file=sys.stderr)
-        print(f"  Title: {title}", file=sys.stderr)
-        print(f"  Path: {file_path}", file=sys.stderr)
+        print(f"  {media_type}: {title}", file=sys.stderr)
+
+    if is_url:
+        hit, cache_key = _try_cache(file_path)
+        if hit:
+            # Clean up downloaded file
+            if media["source_url"]:
+                parent = os.path.dirname(file_path)
+                if parent.startswith("/tmp") or "eyeroll_" in parent:
+                    shutil.rmtree(parent, ignore_errors=True)
+            return hit
+
+    if cache_key is None:
+        cache_key = _cache_key(file_path, backend_label, model, scene_threshold)
 
     try:
         if media_type == "image":
@@ -134,9 +173,11 @@ def watch(
         else:
             intermediates = _analyze_video(
                 file_path, title, max_frames, backend, backend_label, verbose, parallel,
+                min_audio_confidence=min_audio_confidence,
+                scene_threshold=scene_threshold,
             )
 
-        # Cache intermediates (before synthesis)
+        # Cache intermediates (before synthesis) — always save, even with --no-cache
         _cache_save(cache_key, source, intermediates)
 
         # Synthesis always runs fresh with current context
@@ -148,6 +189,20 @@ def watch(
             codebase_context=codebase_context,
             verbose=verbose,
         )
+
+        # Cost reporting
+        if not no_cost:
+            from .cost import estimate_cost, format_cost
+            num_frames = len(intermediates.get("frame_analyses") or [])
+            cost_info = estimate_cost(
+                backend_label=backend_label,
+                model=model,
+                num_frames=num_frames,
+                has_audio=intermediates.get("transcript") is not None,
+                direct_video=intermediates.get("video_analysis") is not None and num_frames == 0,
+            )
+            print(f"  {format_cost(cost_info)}", file=sys.stderr)
+
         return _wrap_report(report, title, intermediates["media_type"], context, backend_label)
     finally:
         # Clean up downloaded files (not local files)
@@ -191,6 +246,8 @@ def _analyze_video(
     backend_label: str,
     verbose: bool,
     parallel: int = 1,
+    min_audio_confidence: float = 0.4,
+    scene_threshold: float = 30.0,
 ) -> dict:
     """Analyze a video file. Returns intermediates dict."""
     duration = get_video_duration(file_path)
@@ -216,7 +273,7 @@ def _analyze_video(
     elif can_batch:
         if verbose:
             print("  Strategy: multi-frame batch (single API call)", file=sys.stderr)
-        frames = extract_key_frames(file_path, max_frames=max_frames)
+        frames = extract_key_frames(file_path, max_frames=max_frames, scene_threshold=scene_threshold)
         if verbose:
             print(f"  Extracted {len(frames)} key frames", file=sys.stderr)
         frame_tuples = [(f["frame_path"], f["timestamp"]) for f in frames]
@@ -228,7 +285,7 @@ def _analyze_video(
     else:
         if verbose:
             print("  Strategy: frame-by-frame", file=sys.stderr)
-        frames = extract_key_frames(file_path, max_frames=max_frames)
+        frames = extract_key_frames(file_path, max_frames=max_frames, scene_threshold=scene_threshold)
         if verbose:
             print(f"  Extracted {len(frames)} key frames", file=sys.stderr)
         frame_analyses = analyze_frames(frames, verbose=verbose, parallel=parallel)
@@ -241,7 +298,7 @@ def _analyze_video(
     if backend.supports_audio and has_audio_track(file_path):
         audio_path = extract_audio(file_path)
         if audio_path:
-            transcript = analyze_audio(audio_path, verbose=verbose)
+            transcript = analyze_audio(audio_path, verbose=verbose, min_confidence=min_audio_confidence)
             if transcript and "[no speech detected]" in transcript.lower():
                 transcript = None
             audio_dir = os.path.dirname(audio_path)
@@ -302,37 +359,47 @@ def _extract_metadata(report: str) -> dict | None:
 # Cache helpers
 # ---------------------------------------------------------------------------
 
-CACHE_DIR = os.path.join(".eyeroll", "cache")
+CACHE_DIR = os.path.join(os.path.expanduser("~"), ".eyeroll", "cache")
+LOCAL_CACHE_DIR = os.path.join(".eyeroll", "cache")
 
 
-def _cache_key(source: str, backend: str, model: str | None) -> str:
-    """Generate a cache key from source + backend + model."""
-    # For local files, hash file content; for URLs, hash the URL
-    if os.path.isfile(source):
-        with open(source, "rb") as f:
-            file_hash = hashlib.sha256(f.read()).hexdigest()[:16]
-        key_input = f"{file_hash}:{backend}:{model or 'default'}"
-    else:
-        key_input = f"{source}:{backend}:{model or 'default'}"
+def _cache_key(
+    file_path: str, backend: str, model: str | None,
+    scene_threshold: float = 30.0,
+) -> str:
+    """Generate a cache key from file content hash + backend + model + scene_threshold.
+
+    Always hashes file content (chunked for large files).
+    Includes scene_threshold so cache invalidates when extraction parameters change.
+    """
+    h = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    file_hash = h.hexdigest()[:16]
+    key_input = f"{file_hash}:{backend}:{model or 'default'}:st{scene_threshold}"
     return hashlib.sha256(key_input.encode()).hexdigest()[:16]
 
 
 def _cache_load(key: str) -> dict | None:
     """Load cached intermediates if they exist.
 
+    Checks global cache (~/.eyeroll/cache/) first, then falls back
+    to legacy local cache (.eyeroll/cache/) for backward compatibility.
+
     Returns a dict with keys: source, title, media_type, frame_analyses,
     video_analysis, transcript — or None if no cache entry exists.
     """
-    cache_path = os.path.join(CACHE_DIR, f"{key}.json")
-    if os.path.isfile(cache_path):
-        try:
-            with open(cache_path) as f:
-                data = json.load(f)
-            # Verify it's the new intermediate format (has 'media_type' key)
-            if "media_type" in data:
-                return data
-        except (json.JSONDecodeError, OSError):
-            pass
+    for cache_dir in (CACHE_DIR, LOCAL_CACHE_DIR):
+        cache_path = os.path.join(cache_dir, f"{key}.json")
+        if os.path.isfile(cache_path):
+            try:
+                with open(cache_path) as f:
+                    data = json.load(f)
+                if "media_type" in data:
+                    return data
+            except (json.JSONDecodeError, OSError):
+                pass
     return None
 
 

@@ -45,12 +45,12 @@ Service account auth uses Vertex AI under the hood.
 
 ## Model
 
-Default model: `gemini-2.0-flash`
+Default model: `gemini-2.5-flash`
 
 Override with the `--model` flag:
 
 ```bash
-eyeroll watch video.mp4 --model gemini-2.0-flash
+eyeroll watch video.mp4 --model gemini-2.5-flash
 ```
 
 ## Direct video upload

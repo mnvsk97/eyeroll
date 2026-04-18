@@ -54,7 +54,11 @@ def test_watch_local_file(runner, tmp_path):
         base_url=None,
         verbose=False,
         no_cache=False,
+        no_context=False,
         parallel=3,  # default for API backends (gemini)
+        min_audio_confidence=0.4,
+        scene_threshold=30.0,
+        no_cost=False,
     )
 
 
@@ -245,6 +249,15 @@ def test_watch_with_codebase_context_inline(runner):
 
     assert result.exit_code == 0
     assert mock_watch.call_args[1]["codebase_context"] == "Python app, key file: src/api.py"
+
+
+def test_watch_no_context_flag(runner):
+    """--no-context flag is passed through to watch()."""
+    with patch("eyeroll.watch.watch", return_value="report") as mock_watch:
+        result = runner.invoke(cli, ["watch", "/fake/video.mp4", "--no-context"])
+
+    assert result.exit_code == 0
+    assert mock_watch.call_args[1]["no_context"] is True
 
 
 def test_watch_with_codebase_context_file(runner, tmp_path):

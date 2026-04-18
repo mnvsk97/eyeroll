@@ -42,6 +42,10 @@ eyeroll watch <source> [options]
 | `--max-frames` | | 20 | Maximum key frames to analyze |
 | `--parallel` | `-p` | 3 (API) / 1 (ollama) | Concurrent workers for frame analysis |
 | `--no-cache` | | false | Skip cache, force fresh analysis |
+| `--no-context` | | false | Skip auto-discovery of codebase context |
+| `--no-cost` | | false | Suppress cost estimate output |
+| `--min-audio-confidence` | | 0.4 | Minimum confidence for Whisper audio segments (0.0-1.0) |
+| `--scene-threshold` | | 30.0 | Pixel-diff threshold for scene-change detection (0=fixed interval) |
 | `--output` | `-o` | stdout | Write report to file |
 | `--verbose` | `-v` | false | Show progress details |
 

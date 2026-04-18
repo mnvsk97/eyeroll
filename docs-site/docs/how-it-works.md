@@ -37,7 +37,7 @@ Returns: file path, media type (`video` or `image`), title, source URL.
 
 `extract.py` extracts key frames from videos using ffmpeg. The strategy:
 
-1. **Extract 1 frame every 2 seconds** -- covers the full video duration
+1. **Scene-change detection** -- by default, eyeroll uses pixel-diff scene detection (`--scene-threshold`, default 30.0) to extract frames at visual transitions rather than fixed intervals. Set to 0 for fixed-interval extraction (1 frame every 2 seconds).
 2. **Deduplicate** -- compare JPEG file sizes between consecutive frames. If the size difference is under 5KB, the frames look similar and the duplicate is dropped. This removes static periods without needing OpenCV.
 3. **Enhance contrast** -- apply `eq=contrast=1.3:brightness=0.05` via ffmpeg. This helps vision models read text on screen, especially with local models.
 4. **Cap at max_frames** -- if more than `max_frames` remain after dedup, evenly sample down.
@@ -46,7 +46,7 @@ A typical 30-second to 2-minute video produces 8-15 meaningful frames.
 
 ### Audio extraction
 
-If the backend supports audio and the video has an audio track (detected via ffprobe), the audio is extracted as MP3 using ffmpeg. Silent or near-empty audio files are discarded.
+If the backend supports audio and the video has an audio track (detected via ffprobe), the audio is extracted as MP3 using ffmpeg. Silent or near-empty audio files are discarded. Use `--min-audio-confidence` (default 0.4) to filter low-confidence Whisper segments.
 
 ## Preflight check
 
@@ -110,7 +110,7 @@ eyeroll caches **intermediate** results, not final reports. This is a deliberate
 
 ### What gets cached
 
-Stored in `.eyeroll/cache/<key>.json`:
+Stored in `~/.eyeroll/cache/<key>.json` (global). Legacy local `.eyeroll/cache/` is checked for backward compatibility.
 
 - Frame-by-frame analyses (text per frame)
 - Direct video analysis text
@@ -140,6 +140,14 @@ The cache key is a SHA-256 hash of:
 
 Same file + same backend + same model = cache hit.
 
+## Auto-discovery of codebase context
+
+Before synthesis, eyeroll automatically discovers project context from well-known files (`CLAUDE.md`, `AGENTS.md`, `CURSOR.md`, `.eyeroll/context.md`, etc.). This means you get grounded file paths in reports without any setup. Disable with `--no-context`.
+
+## Cost estimates
+
+After each analysis, eyeroll prints a cost estimate to stderr showing tokens used and approximate USD cost. Suppress with `--no-cost`. Ollama runs are always free.
+
 ## Synthesis
 
 The synthesis step combines all signals into a structured report. It receives:
@@ -147,7 +155,7 @@ The synthesis step combines all signals into a structured report. It receives:
 - Frame analyses or direct video analysis
 - Audio transcript
 - User-provided context text
-- Codebase context from `.eyeroll/context.md`
+- Codebase context (auto-discovered or from `.eyeroll/context.md`)
 
 The prompt first classifies the content type (bug report, tutorial, feature demo, feature request, code review, or general notes) based on visual evidence, then adapts the analysis sections accordingly. For bug reports, evidence is categorized into confidence tiers:
 

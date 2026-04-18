@@ -247,6 +247,57 @@
       margin-top: 10px;
     }
     .error-msg.show { display: block; }
+
+    /* Try it section */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #444;
+      background: var(--surface);
+    }
+    .drop-zone .drop-text {
+      font-size: 15px;
+      color: var(--muted);
+    }
+
+    .try-progress {
+      text-align: center;
+      padding: 40px 0;
+    }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      margin: 0 auto 16px;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .try-result {
+      margin-top: 20px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .report-content {
+      font-family: "SF Mono", "Fira Code", Menlo, monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 600px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -279,6 +330,58 @@
         <p class="key-value" id="keyValue"></p>
         <p class="key-hint">Save this — it won't be shown again. Set <code>EYEROLL_API_KEY</code> in your env.</p>
       </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- Try it -->
+    <section id="try">
+      <p class="section-label">Try it — no login needed</p>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:24px;">
+        Upload a video or paste a URL. 3 free analyses per day.
+      </p>
+
+      <div class="try-form" id="tryForm">
+        <!-- URL input -->
+        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+          <input type="text" id="tryUrl" placeholder="https://loom.com/share/... or YouTube URL"
+                 style="flex:1;min-width:240px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:12px 16px;outline:none;">
+          <button class="btn" id="tryUrlBtn" onclick="submitUrl()">Analyze URL</button>
+        </div>
+
+        <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">— or —</p>
+
+        <!-- Drop zone -->
+        <div id="dropZone" class="drop-zone">
+          <p class="drop-text">Drop a video or image here, or <label for="fileInput" style="color:var(--accent);cursor:pointer;text-decoration:underline;">browse</label></p>
+          <p style="font-size:12px;color:var(--muted);margin-top:8px;">MP4, MOV, WebM, PNG, JPG — up to 500MB</p>
+          <input type="file" id="fileInput" accept="video/*,image/*" style="display:none;">
+        </div>
+
+        <!-- Optional context -->
+        <div style="margin-top:16px;">
+          <input type="text" id="tryContext" placeholder="Optional context: 'bug after PR #42', 'checkout flow broken'"
+                 style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:12px 16px;outline:none;">
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div id="tryProgress" class="try-progress" style="display:none;">
+        <div class="spinner"></div>
+        <p id="tryStatus" style="font-size:14px;color:var(--muted);">Analyzing...</p>
+      </div>
+
+      <!-- Result -->
+      <div id="tryResult" class="try-result" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <p class="key-label" style="margin:0;">Report</p>
+          <button class="btn" style="font-size:12px;padding:6px 14px;" onclick="copyReport()">Copy</button>
+        </div>
+        <div id="tryReport" class="report-content"></div>
+      </div>
+
+      <!-- Error -->
+      <p class="error-msg" id="tryError"></p>
     </section>
 
     <hr class="divider">
@@ -360,7 +463,7 @@ curl -s -X POST https://api.eyeroll.dev/api/watch \
 
     <!-- Footer -->
     <footer>
-      <p class="footer-note">20 free analyses per day · billing coming soon</p>
+      <p class="footer-note">20 free analyses per day</p>
       <div class="footer-links">
         <a href="https://github.com/mnvsk97/eyeroll" target="_blank" rel="noopener">GitHub</a>
         <a href="https://github.com/mnvsk97/eyeroll/issues" target="_blank" rel="noopener">Issues</a>
@@ -370,6 +473,108 @@ curl -s -X POST https://api.eyeroll.dev/api/watch \
   </div>
 
   <script>
+    /* ---- Try it ---- */
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const tryError = document.getElementById('tryError');
+    const tryProgress = document.getElementById('tryProgress');
+    const tryStatus = document.getElementById('tryStatus');
+    const tryResult = document.getElementById('tryResult');
+    const tryReport = document.getElementById('tryReport');
+    let _reportText = '';
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) submitFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files.length) submitFile(fileInput.files[0]); });
+
+    let _queuePoll = null;
+
+    function showTryProgress(msg) {
+      tryError.classList.remove('show');
+      tryResult.style.display = 'none';
+      tryProgress.style.display = 'block';
+      tryStatus.textContent = msg || 'Analyzing...';
+      startQueuePoll();
+    }
+    function showTryError(msg) {
+      tryProgress.style.display = 'none';
+      tryError.textContent = msg;
+      tryError.classList.add('show');
+      stopQueuePoll();
+    }
+    function showTryResult(report) {
+      tryProgress.style.display = 'none';
+      _reportText = report;
+      tryReport.textContent = report;
+      tryResult.style.display = 'block';
+      stopQueuePoll();
+    }
+
+    function startQueuePoll() {
+      stopQueuePoll();
+      _queuePoll = setInterval(async () => {
+        try {
+          const r = await fetch('/api/queue');
+          const q = await r.json();
+          let msg = 'Analyzing — this may take a minute...';
+          if (q.waiting > 0) msg = `Queued (${q.waiting} ahead of you)... ${q.active}/${q.max_concurrent} slots busy`;
+          else if (q.active >= q.max_concurrent) msg = `Processing... all ${q.max_concurrent} slots busy`;
+          tryStatus.textContent = msg;
+        } catch {}
+      }, 3000);
+    }
+    function stopQueuePoll() {
+      if (_queuePoll) { clearInterval(_queuePoll); _queuePoll = null; }
+    }
+
+    async function submitFile(file) {
+      showTryProgress(`Uploading ${file.name}...`);
+      const fd = new FormData();
+      fd.append('file', file);
+      const ctx = document.getElementById('tryContext').value.trim();
+      if (ctx) fd.append('context', ctx);
+
+      try {
+        const res = await fetch('/api/try', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Analysis failed.');
+        showTryResult(data.report);
+      } catch (err) {
+        showTryError(err.message);
+      }
+    }
+
+    async function submitUrl() {
+      const url = document.getElementById('tryUrl').value.trim();
+      if (!url) return;
+      showTryProgress('Analyzing URL...');
+      const ctx = document.getElementById('tryContext').value.trim();
+
+      try {
+        const res = await fetch('/api/try', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: url, context: ctx || null }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Analysis failed.');
+        showTryResult(data.report);
+      } catch (err) {
+        showTryError(err.message);
+      }
+    }
+
+    function copyReport() {
+      navigator.clipboard.writeText(_reportText).catch(() => {});
+    }
+
+    /* ---- Signup ---- */
     const form = document.getElementById('signupForm');
     const btn = document.getElementById('signupBtn');
     const keyResult = document.getElementById('keyResult');

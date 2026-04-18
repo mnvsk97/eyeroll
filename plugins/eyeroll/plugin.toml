@@ -1,6 +1,6 @@
 [plugin]
 name = "eyeroll"
-version = "0.4.2"
+version = "0.5.0"
 description = "AI eyes that roll through video footage — watch, understand, act"
 author = "mnvsk97"
 repository = "https://github.com/mnvsk97/eyeroll"

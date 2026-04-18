@@ -17,6 +17,7 @@ Run:
     uvicorn eyeroll.server.main:app --host 0.0.0.0 --port $PORT
 """
 
+import asyncio
 import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -25,7 +26,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, EmailStr
 
@@ -47,6 +48,10 @@ app = FastAPI(title="eyeroll API", docs_url=None, redoc_url=None)
 
 _pool = None
 _STATIC_DIR = Path(__file__).parent / "static"
+
+# Concurrency limiter — at most N analyses run at once, rest queue up.
+_MAX_CONCURRENT = int(os.environ.get("EYEROLL_MAX_CONCURRENT", "3"))
+_analysis_sem = asyncio.Semaphore(_MAX_CONCURRENT)
 
 
 @app.on_event("startup")
@@ -92,8 +97,13 @@ class SignupRequest(BaseModel):
 
 @app.post("/signup")
 async def signup(body: SignupRequest):
-    """Create account (idempotent on email). Returns the default API key."""
-    user, key = await create_user(_pool, body.email)
+    """Create account. Returns the default API key for new users only."""
+    key, is_new = await create_user(_pool, body.email)
+    if not is_new:
+        raise HTTPException(
+            status_code=409,
+            detail="An account with this email already exists. Use your existing API key.",
+        )
     return {
         "api_key": key["key"],
         "key_id": key["id"],
@@ -163,7 +173,7 @@ class WatchRequest(BaseModel):
 
 
 @app.post("/api/watch")
-async def watch(body: WatchRequest, ctx: dict = Depends(_auth)):
+async def watch(request: Request, ctx: dict = Depends(_auth)):
     allowed, used = await check_rate_limit(_pool, ctx["user_id"])
     if not allowed:
         reset_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
@@ -177,32 +187,131 @@ async def watch(body: WatchRequest, ctx: dict = Depends(_auth)):
             },
         )
 
-    try:
-        report = await _run_analysis(body.source, body.context, body.max_frames)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    content_type = request.headers.get("content-type", "")
+
+    if "multipart/form-data" in content_type:
+        # File upload — save to temp dir and analyze
+        import tempfile
+        form = await request.form()
+        uploaded: UploadFile = form.get("file")
+        if not uploaded:
+            raise HTTPException(status_code=400, detail="Missing 'file' in multipart upload.")
+        context = form.get("context")
+        max_frames = int(form.get("max_frames", "20"))
+
+        tmp_dir = tempfile.mkdtemp(prefix="eyeroll_upload_")
+        tmp_path = os.path.join(tmp_dir, uploaded.filename)
+        with open(tmp_path, "wb") as f:
+            f.write(await uploaded.read())
+
+        try:
+            report = await _run_analysis(tmp_path, context, max_frames)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+        finally:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+    else:
+        # JSON body — source is a URL
+        body = WatchRequest(**(await request.json()))
+        try:
+            report = await _run_analysis(body.source, body.context, body.max_frames)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
 
     await log_usage(_pool, ctx["user_id"], ctx["key_id"])
     return {"report": report}
 
 
 async def _run_analysis(source: str, context: str | None, max_frames: int) -> str:
-    import asyncio
     from eyeroll.watch import watch as run_watch
 
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,
-        lambda: run_watch(
-            source=source,
-            context=context,
-            max_frames=max_frames,
-            backend_name=_pick_backend(),
-            verbose=False,
-            no_cache=False,
-            parallel=3,
-        ),
-    )
+    async with _analysis_sem:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: run_watch(
+                source=source,
+                context=context,
+                max_frames=max_frames,
+                backend_name=_pick_backend(),
+                verbose=False,
+                no_cache=False,
+                parallel=3,
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# /api/try  — anonymous, IP-rate-limited
+# ---------------------------------------------------------------------------
+
+_try_usage: dict[str, list] = {}  # ip -> [timestamps]
+_TRY_LIMIT = 3  # per IP per day
+
+
+def _check_try_limit(ip: str) -> bool:
+    """Return True if the IP is under the anonymous try limit."""
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=24)
+    hits = _try_usage.get(ip, [])
+    hits = [t for t in hits if t > cutoff]
+    _try_usage[ip] = hits
+    return len(hits) < _TRY_LIMIT
+
+
+@app.post("/api/try")
+async def try_watch(request: Request):
+    """Anonymous video analysis — no API key needed. 3/day per IP."""
+    ip = request.client.host if request.client else "unknown"
+    if not _check_try_limit(ip):
+        raise HTTPException(status_code=429, detail="Daily try limit reached (3/day). Sign up for more.")
+
+    content_type = request.headers.get("content-type", "")
+
+    if "multipart/form-data" in content_type:
+        import tempfile
+        form = await request.form()
+        uploaded: UploadFile = form.get("file")
+        if not uploaded:
+            raise HTTPException(status_code=400, detail="Missing 'file' in upload.")
+        context = form.get("context")
+        max_frames = int(form.get("max_frames", "20"))
+
+        tmp_dir = tempfile.mkdtemp(prefix="eyeroll_try_")
+        tmp_path = os.path.join(tmp_dir, uploaded.filename)
+        with open(tmp_path, "wb") as f:
+            f.write(await uploaded.read())
+
+        try:
+            report = await _run_analysis(tmp_path, context, max_frames)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+        finally:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+    else:
+        body = WatchRequest(**(await request.json()))
+        try:
+            report = await _run_analysis(body.source, body.context, body.max_frames)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    _try_usage.setdefault(ip, []).append(datetime.now(timezone.utc))
+    return {"report": report}
+
+
+@app.get("/api/queue")
+async def queue_status():
+    """Check how busy the analysis queue is."""
+    # _analysis_sem._value is the number of remaining slots
+    active = _MAX_CONCURRENT - _analysis_sem._value
+    waiting = max(0, len(getattr(_analysis_sem, '_waiters', [])))
+    return {
+        "active": active,
+        "waiting": waiting,
+        "max_concurrent": _MAX_CONCURRENT,
+    }
 
 
 def _pick_backend() -> str:

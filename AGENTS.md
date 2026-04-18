@@ -1,8 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
 ## Project
 
-eyeroll — AI eyes that roll through video footage. Takes video URLs (Loom, YouTube), local video files, or screenshots as input. Supports Gemini 2.5 Flash (default), OpenAI GPT-4o, Ollama (local), OpenRouter, Groq, Grok, Cerebras, and any OpenAI-compatible endpoint. Produces structured notes that coding agents can act on — fix bugs, build features, create skills, or anything else.
+eyeroll — AI eyes that roll through video footage. Takes video URLs (Loom, YouTube), local video files, or screenshots as input. Supports Gemini Flash (API) and Ollama with Qwen3-VL (local, private). Produces structured notes that coding agents can act on — fix bugs, build features, create skills, or anything else.
 
 ## Commands
 
@@ -33,20 +33,13 @@ eyeroll watch <path> --verbose --output report.md         # verbose + write to f
 - **extract.py**: ffmpeg wrappers for key frame extraction, audio extraction, duration detection.
 - **analyze.py**: Backend-agnostic analysis. Frame-by-frame with structured prompts, direct video upload (Gemini only), audio transcription, and synthesis.
 - **watch.py**: Orchestrates the pipeline. Chooses strategy based on backend capabilities and video size.
-- **context.py**: Auto-discovers codebase context from CLAUDE.md, AGENTS.md, CURSOR.md, and similar files.
-- **cost.py**: Cost estimation for API calls. Prints token counts and USD cost after each run.
-- **cli.py**: Click CLI with `init` and `watch` commands. Flags include `--backend`, `--model`, `--no-context`, `--no-cost`, `--min-audio-confidence`, `--scene-threshold`.
+- **cli.py**: Click CLI with `init` and `watch` commands. `--backend` and `--model` flags.
 
 ## Backends
 
-- **gemini** (default): Gemini 2.5 Flash. Supports direct video upload, audio transcription. Requires GEMINI_API_KEY.
-- **openai**: OpenAI GPT-4o. Multi-frame batch + Whisper audio transcription. Requires OPENAI_API_KEY.
-- **ollama**: Local models via Ollama. Frame-by-frame image analysis only. Default model: qwen3-vl. No API key needed.
-- **openrouter**: OpenRouter API. Multi-frame batch. Requires OPENROUTER_API_KEY.
-- **groq**: Groq API. Multi-frame batch. Requires GROQ_API_KEY.
-- **grok**: xAI Grok API. Multi-frame batch. Requires GROK_API_KEY.
-- **cerebras**: Cerebras API. Multi-frame batch. Requires CEREBRAS_API_KEY.
-- **openai-compat**: Any OpenAI-compatible endpoint via `--base-url`.
+- **gemini** (default): Gemini Flash API. Supports direct video upload, audio transcription. Requires GEMINI_API_KEY.
+- **openai**: OpenAI GPT-4o. Frame-by-frame image analysis + Whisper audio transcription. Requires OPENAI_API_KEY.
+- **ollama**: Local models via Ollama. Supports frame-by-frame image analysis only (no direct video, no audio). Default model: qwen3-vl. No API key needed.
 
 ## Key design decisions
 

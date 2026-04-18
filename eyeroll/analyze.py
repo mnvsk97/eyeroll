@@ -54,6 +54,188 @@ AUDIO_PROMPT = (
     "If the audio is silent or contains no speech, respond with: [no speech detected]"
 )
 
+# ---------------------------------------------------------------------------
+# Temporal analysis prompts — past / present / future
+# ---------------------------------------------------------------------------
+
+PAST_PROMPT = """You are a senior developer examining a screen recording.
+
+Observations from the recording:
+{observations}
+
+Context from the person who shared this:
+{context}
+
+Analyze the PAST — the historical context, background, and conditions that led to what is shown.
+
+Think like a developer investigating: What was the state of things before this recording? What led to this situation? What was the user or developer trying to accomplish? What prior actions, changes, or decisions are implied by what we see?
+
+Draw on both the visual observations and the context text. Be concise and factual. Say "unclear" rather than guessing."""
+
+PRESENT_PROMPT = """You are a senior developer examining a screen recording.
+
+Observations from the recording:
+{observations}
+
+Audio transcript:
+{transcript}
+
+Codebase context:
+{codebase_context}
+
+Analyze the PRESENT — the current state as shown in the recording, across three dimensions:
+
+- **Technical**: Errors, broken behavior, system output, code state, API responses, console logs
+- **Product**: What features work, what is broken, what is incomplete, what the user experience looks like right now
+- **Business**: What does this mean for users, stakeholders, or the product's goals?
+
+Quote exact text from the recording. Note what is confirmed by direct evidence vs. what is inferred. Say "unclear" rather than guessing."""
+
+FUTURE_PROMPT = """You are a senior developer examining a screen recording.
+
+Historical context (Past):
+{past}
+
+Current state (Present):
+{present}
+
+Context from the person who shared this:
+{context}
+
+Reason about the FUTURE — what needs to happen to resolve this or achieve the goal.
+
+Consider:
+- What is the desired outcome? What does success look like?
+- What needs to change, be built, or be fixed to get from present to that future?
+- What are the concrete next steps a developer should take?
+- If this is a bug: what is the expected behavior vs. actual behavior? What is the fix?
+- If this is a feature request: what needs to be built? How should it behave?
+- What can a coding agent act on right now?
+
+Be specific. Reference actual evidence from Past and Present."""
+
+TEMPORAL_SYNTHESIS_PROMPT = """You are a senior developer producing a final report from a screen recording analysis.
+
+## Past — Context & History
+{past}
+
+## Present — Current State
+{present}
+
+## Future — Desired Outcome
+{future}
+
+## Context from the person who shared this:
+{context}
+
+---
+
+First, determine what KIND of content this is:
+- **Bug report**: shows broken behavior, errors, unexpected results
+- **Feature demo**: demonstrates working functionality, a new feature, or a product walkthrough
+- **Tutorial/how-to**: teaches a process or workflow step by step
+- **Feature request**: shows desired behavior or proposes new functionality
+- **Code review**: walks through code changes or PR diffs
+- **General notes**: anything else
+
+Then synthesize into structured, actionable notes. Output EXACTLY this format:
+
+## Video Analysis
+
+### Metadata
+```
+category: [bug | feature | other]
+confidence: [high | medium | low]
+scope: [in-context | out-of-context]
+severity: [critical | moderate | low]
+actionable: [yes | no]
+```
+
+Rules for metadata:
+- **category**: "bug" for bug reports, "feature" for feature demos/requests/tutorials, "other" for everything else
+- **confidence**: how confident you are in your analysis
+- **scope**: "in-context" if the video relates to the codebase described in context, "out-of-context" if unrelated or no codebase context provided
+- **severity**: "critical" for crashes/data loss/security issues, "moderate" for broken features/errors, "low" for cosmetic/minor issues. For non-bugs, base on importance.
+- **actionable**: "yes" if a coding agent can take concrete action (fix a bug, build a feature, create a skill), "no" if it's just informational
+
+### Content Type: [bug report | feature demo | tutorial | feature request | code review | general notes]
+State what kind of content this is.
+
+### Summary
+One or two sentences describing what this recording shows.
+
+### Temporal Narrative
+A developer's coherent story: what led to this (past) → what is happening now (present) → what needs to happen (future).
+
+### Key Evidence
+- Exact text from the screen (error messages, URLs, labels, code — quoted verbatim)
+- UI elements and their state
+- HTTP status codes, console output, network requests if visible
+- Environment, version, or configuration info
+
+### Audio/Narration Summary
+Key points from what was said. Or "(silent recording)" if no audio.
+
+### Analysis
+<!-- Adapt based on content type -->
+
+**If bug report:**
+
+### Reproduction Steps
+Minimal steps to reproduce:
+1. Step one
+2. Step two
+
+- Expected behavior vs. actual behavior
+- Evidence:
+  - **Visible in recording**: directly observed (quote exact text)
+  - **Informed by codebase context**: only reference files from the codebase context section
+  - **Hypothesis (not confirmed)**: educated guesses, clearly labeled
+- Suggested search patterns for the coding agent
+- How to fix (concrete steps, reference actual project files when available)
+- How to verify the fix
+
+**If feature demo:**
+- What feature or workflow is being demonstrated
+- Key capabilities shown
+- How it relates to the codebase
+
+**If tutorial/how-to:**
+- What process is being taught
+- Tools and commands used
+- Key steps to reproduce
+- Could this be automated into a skill or script?
+
+**If feature request:**
+- What is being requested
+- Desired behavior
+- How it differs from current behavior
+
+**If code review:**
+- Files/functions reviewed
+- Key changes discussed
+- Concerns or approvals noted
+
+**If general notes:**
+- Key points and takeaways
+- Action items
+
+### Suggested Next Steps
+Concrete actions based on content type.
+
+### Clarifying Questions
+Only include if something is genuinely unclear — don't pad with generic questions.
+
+---
+
+Rules:
+- Only include information from the temporal analyses and context above
+- Quote text EXACTLY — don't paraphrase
+- If uncertain, say so rather than guessing
+- Do NOT assume this is a bug — determine type from evidence first
+- NEVER state a file path as fact unless it appears in the codebase context. All other paths are hypotheses — say so explicitly.
+- This report will be read by a coding agent. Be precise and actionable."""
+
 SYNTHESIS_PROMPT = """You are a senior developer analyzing a screen recording or screenshot.
 
 Here are the raw observations from the video:
@@ -206,6 +388,22 @@ Rules:
 - This report will be read by a coding agent, not a human. Be precise and codebase-oriented when relevant, but don't force technical analysis on non-technical content."""
 
 
+def _format_observations(
+    frame_analyses: list[dict] | None,
+    video_analysis: str | None,
+) -> str:
+    """Format raw frame/video observations into a flat text block."""
+    if frame_analyses:
+        from .extract import fmt_timestamp
+        return "\n\n".join(
+            f"Frame {fa['frame_index']} @ {fmt_timestamp(fa['timestamp'])}: {fa['analysis']}"
+            for fa in frame_analyses
+        )
+    if video_analysis:
+        return video_analysis
+    return "(no visual observations available)"
+
+
 def analyze_frames(
     frames: list[dict],
     backend_name: str | None = None,
@@ -303,7 +501,90 @@ def analyze_audio(
     return backend.analyze_audio(audio_path, AUDIO_PROMPT, verbose=verbose)
 
 
-def synthesize_report(
+def analyze_past(
+    frame_analyses: list[dict] | None = None,
+    video_analysis: str | None = None,
+    context: str | None = None,
+    backend_name: str | None = None,
+    verbose: bool = False,
+    **backend_kwargs,
+) -> str:
+    """Analyze the historical context — what led to this recording.
+
+    Returns a text analysis of the past: background, preconditions, what the
+    user or developer was trying to accomplish before this moment.
+    """
+    backend = get_backend(backend_name, **backend_kwargs)
+
+    observations = _format_observations(frame_analyses, video_analysis)
+    prompt = PAST_PROMPT.format(
+        observations=observations,
+        context=context or "(no additional context provided)",
+    )
+
+    if verbose:
+        print("  Analyzing past (historical context)...", file=sys.stderr)
+
+    return backend.generate(prompt, verbose=verbose)
+
+
+def analyze_present(
+    frame_analyses: list[dict] | None = None,
+    video_analysis: str | None = None,
+    transcript: str | None = None,
+    codebase_context: str | None = None,
+    backend_name: str | None = None,
+    verbose: bool = False,
+    **backend_kwargs,
+) -> str:
+    """Analyze the current state shown in the recording.
+
+    Returns a text analysis of the present: technical state, product state,
+    and business impact — what is happening right now.
+    """
+    backend = get_backend(backend_name, **backend_kwargs)
+
+    observations = _format_observations(frame_analyses, video_analysis)
+    prompt = PRESENT_PROMPT.format(
+        observations=observations,
+        transcript=transcript or "(no audio / silent recording)",
+        codebase_context=codebase_context or "(no codebase context available — all file paths and function names are hypotheses, not confirmed facts)",
+    )
+
+    if verbose:
+        print("  Analyzing present (current state)...", file=sys.stderr)
+
+    return backend.generate(prompt, verbose=verbose)
+
+
+def analyze_future(
+    past: str,
+    present: str,
+    context: str | None = None,
+    backend_name: str | None = None,
+    verbose: bool = False,
+    **backend_kwargs,
+) -> str:
+    """Reason about the desired future — what needs to happen next.
+
+    Takes past and present analyses and reasons toward the desired outcome,
+    success criteria, and concrete developer next steps.
+    """
+    backend = get_backend(backend_name, **backend_kwargs)
+
+    prompt = FUTURE_PROMPT.format(
+        past=past,
+        present=present,
+        context=context or "(no additional context provided)",
+    )
+
+    if verbose:
+        print("  Analyzing future (desired outcome)...", file=sys.stderr)
+
+    return backend.generate(prompt, verbose=verbose)
+
+
+def analyze_temporal(
     frame_analyses: list[dict] | None = None,
     video_analysis: str | None = None,
     transcript: str | None = None,
@@ -312,30 +593,87 @@ def synthesize_report(
     backend_name: str | None = None,
     verbose: bool = False,
     **backend_kwargs,
+) -> dict:
+    """Run the full past/present/future temporal analysis.
+
+    Returns a dict with keys: past, present, future — each a text analysis
+    representing one temporal lens on the recording.
+    """
+    past = analyze_past(
+        frame_analyses=frame_analyses,
+        video_analysis=video_analysis,
+        context=context,
+        backend_name=backend_name,
+        verbose=verbose,
+        **backend_kwargs,
+    )
+    present = analyze_present(
+        frame_analyses=frame_analyses,
+        video_analysis=video_analysis,
+        transcript=transcript,
+        codebase_context=codebase_context,
+        backend_name=backend_name,
+        verbose=verbose,
+        **backend_kwargs,
+    )
+    future = analyze_future(
+        past=past,
+        present=present,
+        context=context,
+        backend_name=backend_name,
+        verbose=verbose,
+        **backend_kwargs,
+    )
+    return {"past": past, "present": present, "future": future}
+
+
+def synthesize_report(
+    frame_analyses: list[dict] | None = None,
+    video_analysis: str | None = None,
+    transcript: str | None = None,
+    context: str | None = None,
+    codebase_context: str | None = None,
+    backend_name: str | None = None,
+    verbose: bool = False,
+    past: str | None = None,
+    present: str | None = None,
+    future: str | None = None,
+    **backend_kwargs,
 ) -> str:
     """Combine all analysis signals into structured notes.
+
+    When past/present/future temporal analyses are provided, uses the temporal
+    synthesis path. Otherwise falls back to raw frame analysis (legacy path).
 
     Returns markdown report.
     """
     backend = get_backend(backend_name, **backend_kwargs)
 
-    if frame_analyses:
-        from .extract import fmt_timestamp
-        frame_text = "\n\n".join(
-            f"### Frame {fa['frame_index']} @ {fmt_timestamp(fa['timestamp'])}\n{fa['analysis']}"
-            for fa in frame_analyses
+    if past is not None and present is not None and future is not None:
+        prompt = TEMPORAL_SYNTHESIS_PROMPT.format(
+            past=past,
+            present=present,
+            future=future,
+            context=context or "(no additional context provided)",
         )
-    elif video_analysis:
-        frame_text = f"### Full video analysis\n{video_analysis}"
     else:
-        frame_text = "(no visual analysis available)"
+        if frame_analyses:
+            from .extract import fmt_timestamp
+            frame_text = "\n\n".join(
+                f"### Frame {fa['frame_index']} @ {fmt_timestamp(fa['timestamp'])}\n{fa['analysis']}"
+                for fa in frame_analyses
+            )
+        elif video_analysis:
+            frame_text = f"### Full video analysis\n{video_analysis}"
+        else:
+            frame_text = "(no visual analysis available)"
 
-    prompt = SYNTHESIS_PROMPT.format(
-        frame_analyses=frame_text,
-        context=context or "(no additional context provided)",
-        transcript=transcript or "(no audio / silent recording)",
-        codebase_context=codebase_context or "(no codebase context available — all file paths and function names below are hypotheses, not confirmed facts)",
-    )
+        prompt = SYNTHESIS_PROMPT.format(
+            frame_analyses=frame_text,
+            context=context or "(no additional context provided)",
+            transcript=transcript or "(no audio / silent recording)",
+            codebase_context=codebase_context or "(no codebase context available — all file paths and function names below are hypotheses, not confirmed facts)",
+        )
 
     if verbose:
         print("  Synthesizing report...", file=sys.stderr)

@@ -7,12 +7,20 @@ import pytest
 from eyeroll.analyze import (
     analyze_audio,
     analyze_frames,
+    analyze_past,
+    analyze_present,
+    analyze_future,
+    analyze_temporal,
     analyze_video_direct,
     synthesize_report,
     FRAME_ANALYSIS_PROMPT,
     VIDEO_ANALYSIS_PROMPT,
     AUDIO_PROMPT,
     SYNTHESIS_PROMPT,
+    TEMPORAL_SYNTHESIS_PROMPT,
+    PAST_PROMPT,
+    PRESENT_PROMPT,
+    FUTURE_PROMPT,
 )
 
 
@@ -257,3 +265,264 @@ def test_synthesis_prompt_forbids_invented_paths():
 def test_synthesis_prompt_does_not_assume_bugs():
     """Verify the prompt explicitly says not to assume bugs."""
     assert "Do NOT assume this is a bug" in SYNTHESIS_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# analyze_past
+# ---------------------------------------------------------------------------
+
+def test_analyze_past_calls_backend_generate():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Past analysis text"
+
+    frame_analyses = [{"frame_index": 0, "timestamp": 0.0, "analysis": "login page shown"}]
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        result = analyze_past(frame_analyses=frame_analyses, context="auth broke after deploy")
+
+    assert result == "Past analysis text"
+    mock_backend.generate.assert_called_once()
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "login page shown" in prompt
+    assert "auth broke after deploy" in prompt
+
+
+def test_analyze_past_with_video_analysis():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Past from video"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        result = analyze_past(video_analysis="user navigates to settings page")
+
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "user navigates to settings page" in prompt
+
+
+def test_analyze_past_no_context_fallback():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Past"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        analyze_past()
+
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "(no additional context provided)" in prompt
+
+
+# ---------------------------------------------------------------------------
+# analyze_present
+# ---------------------------------------------------------------------------
+
+def test_analyze_present_calls_backend_generate():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Present analysis text"
+
+    frame_analyses = [{"frame_index": 0, "timestamp": 0.0, "analysis": "error 500 shown"}]
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        result = analyze_present(
+            frame_analyses=frame_analyses,
+            transcript="the server is crashing",
+            codebase_context="## Project: myapp",
+        )
+
+    assert result == "Present analysis text"
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "error 500 shown" in prompt
+    assert "the server is crashing" in prompt
+    assert "## Project: myapp" in prompt
+
+
+def test_analyze_present_no_transcript_fallback():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Present"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        analyze_present()
+
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "(no audio / silent recording)" in prompt
+
+
+def test_analyze_present_no_codebase_context_fallback():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Present"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        analyze_present()
+
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "hypotheses" in prompt
+
+
+# ---------------------------------------------------------------------------
+# analyze_future
+# ---------------------------------------------------------------------------
+
+def test_analyze_future_calls_backend_generate():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Future analysis text"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        result = analyze_future(
+            past="user tried to log in",
+            present="500 error on POST /auth",
+            context="broke after deploy",
+        )
+
+    assert result == "Future analysis text"
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "user tried to log in" in prompt
+    assert "500 error on POST /auth" in prompt
+    assert "broke after deploy" in prompt
+
+
+def test_analyze_future_no_context_fallback():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Future"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        analyze_future(past="p", present="q")
+
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "(no additional context provided)" in prompt
+
+
+# ---------------------------------------------------------------------------
+# analyze_temporal
+# ---------------------------------------------------------------------------
+
+def test_analyze_temporal_returns_dict_with_three_phases():
+    mock_backend = MagicMock()
+    mock_backend.generate.side_effect = ["past text", "present text", "future text"]
+
+    frame_analyses = [{"frame_index": 0, "timestamp": 0.0, "analysis": "some UI"}]
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        result = analyze_temporal(
+            frame_analyses=frame_analyses,
+            context="test context",
+            codebase_context="myapp stack",
+        )
+
+    assert result == {"past": "past text", "present": "present text", "future": "future text"}
+    assert mock_backend.generate.call_count == 3
+
+
+def test_analyze_temporal_passes_past_to_future():
+    """analyze_future receives the output of analyze_past."""
+    mock_backend = MagicMock()
+    mock_backend.generate.side_effect = ["past output", "present output", "future output"]
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        analyze_temporal()
+
+    # Third call (future) should include the past and present outputs in its prompt
+    future_prompt = mock_backend.generate.call_args_list[2][0][0]
+    assert "past output" in future_prompt
+    assert "present output" in future_prompt
+
+
+# ---------------------------------------------------------------------------
+# synthesize_report — temporal path
+# ---------------------------------------------------------------------------
+
+def test_synthesize_report_temporal_path():
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "## Temporal Report"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        result = synthesize_report(
+            past="historical context here",
+            present="current state here",
+            future="desired outcome here",
+            context="fix the login bug",
+        )
+
+    assert result == "## Temporal Report"
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "historical context here" in prompt
+    assert "current state here" in prompt
+    assert "desired outcome here" in prompt
+    assert "fix the login bug" in prompt
+
+
+def test_synthesize_report_temporal_uses_temporal_prompt():
+    """When temporal phases are given, TEMPORAL_SYNTHESIS_PROMPT is used."""
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Report"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        synthesize_report(past="p", present="q", future="r")
+
+    prompt = mock_backend.generate.call_args[0][0]
+    # Temporal path has "Temporal Narrative" section
+    assert "Temporal Narrative" in prompt
+
+
+def test_synthesize_report_falls_back_without_temporal():
+    """Without temporal phases, legacy SYNTHESIS_PROMPT is used."""
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "Report"
+
+    with patch("eyeroll.analyze.get_backend", return_value=mock_backend):
+        synthesize_report(frame_analyses=[
+            {"frame_index": 0, "timestamp": 0.0, "analysis": "some frame"}
+        ])
+
+    prompt = mock_backend.generate.call_args[0][0]
+    assert "some frame" in prompt
+    # Legacy path does not have "Temporal Narrative"
+    assert "Temporal Narrative" not in prompt
+
+
+# ---------------------------------------------------------------------------
+# TEMPORAL_SYNTHESIS_PROMPT content checks
+# ---------------------------------------------------------------------------
+
+def test_temporal_synthesis_prompt_has_confidence_tiers():
+    assert "Visible in recording" in TEMPORAL_SYNTHESIS_PROMPT
+    assert "Informed by codebase context" in TEMPORAL_SYNTHESIS_PROMPT
+    assert "Hypothesis" in TEMPORAL_SYNTHESIS_PROMPT
+
+
+def test_temporal_synthesis_prompt_detects_content_type():
+    assert "Content Type" in TEMPORAL_SYNTHESIS_PROMPT
+    assert "bug report" in TEMPORAL_SYNTHESIS_PROMPT
+    assert "feature demo" in TEMPORAL_SYNTHESIS_PROMPT
+    assert "tutorial" in TEMPORAL_SYNTHESIS_PROMPT
+
+
+def test_temporal_synthesis_prompt_forbids_invented_paths():
+    assert "NEVER state a file path as fact unless it appears in the codebase context" in TEMPORAL_SYNTHESIS_PROMPT
+
+
+def test_temporal_synthesis_prompt_does_not_assume_bugs():
+    assert "Do NOT assume this is a bug" in TEMPORAL_SYNTHESIS_PROMPT
+
+
+def test_temporal_synthesis_prompt_has_three_sections():
+    assert "Past" in TEMPORAL_SYNTHESIS_PROMPT
+    assert "Present" in TEMPORAL_SYNTHESIS_PROMPT
+    assert "Future" in TEMPORAL_SYNTHESIS_PROMPT
+    assert "Temporal Narrative" in TEMPORAL_SYNTHESIS_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Temporal prompt content checks
+# ---------------------------------------------------------------------------
+
+def test_past_prompt_asks_about_history():
+    assert "PAST" in PAST_PROMPT
+    assert "historical" in PAST_PROMPT.lower() or "history" in PAST_PROMPT.lower()
+
+
+def test_present_prompt_covers_three_dimensions():
+    assert "Technical" in PRESENT_PROMPT
+    assert "Product" in PRESENT_PROMPT
+    assert "Business" in PRESENT_PROMPT
+
+
+def test_future_prompt_asks_about_desired_outcome():
+    assert "FUTURE" in FUTURE_PROMPT
+    assert "desired" in FUTURE_PROMPT.lower() or "outcome" in FUTURE_PROMPT.lower()

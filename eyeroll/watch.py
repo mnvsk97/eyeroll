@@ -11,6 +11,7 @@ from .acquire import acquire
 from .analyze import (
     analyze_audio,
     analyze_frames,
+    analyze_temporal,
     analyze_video_direct,
     synthesize_report,
 )
@@ -92,12 +93,19 @@ def watch(
         cached = _cache_load(cache_key)
         if cached:
             if verbose:
-                print("  Cache hit — reusing cached analysis, re-running synthesis", file=sys.stderr)
-            # Re-run synthesis with current context/codebase_context
-            report = synthesize_report(
+                print("  Cache hit — reusing cached analysis, re-running temporal synthesis", file=sys.stderr)
+            temporal = analyze_temporal(
                 frame_analyses=cached.get("frame_analyses"),
                 video_analysis=cached.get("video_analysis"),
                 transcript=cached.get("transcript"),
+                context=context,
+                codebase_context=codebase_context,
+                verbose=verbose,
+            )
+            report = synthesize_report(
+                past=temporal["past"],
+                present=temporal["present"],
+                future=temporal["future"],
                 context=context,
                 codebase_context=codebase_context,
                 verbose=verbose,
@@ -126,14 +134,23 @@ def watch(
                 file_path, title, max_frames, backend, backend_label, verbose, parallel,
             )
 
-        # Cache intermediates (before synthesis)
+        # Cache intermediates (before temporal analysis)
         _cache_save(cache_key, source, intermediates)
 
-        # Synthesis always runs fresh with current context
-        report = synthesize_report(
+        # Temporal analysis runs fresh — past/present/future are context-dependent
+        temporal = analyze_temporal(
             frame_analyses=intermediates["frame_analyses"],
             video_analysis=intermediates["video_analysis"],
             transcript=intermediates["transcript"],
+            context=context,
+            codebase_context=codebase_context,
+            verbose=verbose,
+        )
+
+        report = synthesize_report(
+            past=temporal["past"],
+            present=temporal["present"],
+            future=temporal["future"],
             context=context,
             codebase_context=codebase_context,
             verbose=verbose,

@@ -55,6 +55,7 @@ def test_watch_local_file(runner, tmp_path):
         verbose=False,
         no_cache=False,
         parallel=3,  # default for API backends (gemini)
+        output_mode="default",
     )
 
 

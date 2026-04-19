@@ -205,6 +205,130 @@ Rules:
 - NEVER state a file path as fact unless it appears in the codebase context section. If no codebase context is available, ALL file paths are hypotheses — say so explicitly.
 - This report will be read by a coding agent, not a human. Be precise and codebase-oriented when relevant, but don't force technical analysis on non-technical content."""
 
+SYNTHESIS_PROMPT_QUICK = """You are analyzing a screen recording or screenshot. Describe what you see directly and concisely.
+
+Raw observations:
+
+{frame_analyses}
+
+{context}
+
+Output EXACTLY this format:
+
+## What's Shown
+One or two sentences describing what this recording shows.
+
+## Key Details
+- Exact text visible (error messages, URLs, labels, code — quote verbatim)
+- UI elements and their state
+- Notable actions or transitions
+
+## Interpretation
+What is most likely happening or being demonstrated?
+
+Rules:
+- Only describe what you can actually see
+- Quote exact text from the screen — do not paraphrase
+- No elaborate analysis — keep it brief and direct"""
+
+SYNTHESIS_PROMPT_MINIMAL = """You are a developer analyzing a screen recording or screenshot.
+
+Raw observations:
+
+{frame_analyses}
+
+Context: {context}
+Codebase: {codebase_context}
+
+Output EXACTLY this format:
+
+### Metadata
+```
+category: [bug | feature | other]
+confidence: [high | medium | low]
+actionable: [yes | no]
+```
+
+### Summary
+One or two sentences.
+
+### Key Details
+- Exact text visible (quote verbatim)
+- Errors, URLs, status codes, relevant UI state
+
+### Next Steps
+- Concrete action items only (3–5 max)
+
+Rules: quote text exactly, no padding, no generic questions."""
+
+SYNTHESIS_PROMPT_PR = """You are analyzing a screen recording or screenshot to produce a GitHub pull request description.
+
+Raw observations:
+
+{frame_analyses}
+
+Context: {context}
+Codebase: {codebase_context}
+
+Based on what you see, write a GitHub PR description as if this recording documents the changes being made or requested.
+
+Output EXACTLY this format:
+
+## [PR Title]
+Write a concise PR title (under 72 characters) describing the change.
+
+## Summary
+2–3 sentences explaining what this PR does and why.
+
+## Changes
+- Specific changes visible in the recording (bullet list)
+- Quote exact text, error messages, or UI changes seen
+
+## Why
+What problem does this solve or what does it enable?
+
+## Testing
+- [ ] What to verify based on what was shown
+- [ ] Edge cases visible in the recording
+
+Rules:
+- Be concrete — no generic placeholders
+- Quote exact UI text or error messages when relevant
+- If the recording shows a bug, frame the PR as fixing it; if a feature, frame it as adding it"""
+
+SYNTHESIS_PROMPT_DESCRIPTION = """You are analyzing a screen recording or screenshot to produce a clear descriptive document.
+
+Raw observations:
+
+{frame_analyses}
+
+Context: {context}
+Codebase: {codebase_context}
+
+Output EXACTLY this format:
+
+## Overview
+1–2 sentences: what this recording shows and why it matters.
+
+## What Was Shown
+Narrative description of the content in order. Reference exact text and UI state seen.
+
+## Key Details
+- Exact text visible (quote verbatim)
+- Errors, URLs, status codes, code snippets
+- UI elements and their state
+
+## Context & Significance
+How this relates to the provided context. What is notable or important.
+
+## Recommendations
+Concrete takeaways or action items from this recording.
+
+Rules:
+- Write for a technical audience
+- Quote exact text from the screen
+- Be specific — avoid vague generalizations"""
+
 
 def analyze_frames(
     frames: list[dict],
@@ -303,6 +427,14 @@ def analyze_audio(
     return backend.analyze_audio(audio_path, AUDIO_PROMPT, verbose=verbose)
 
 
+_OUTPUT_MODE_PROMPTS = {
+    "quick": SYNTHESIS_PROMPT_QUICK,
+    "minimal": SYNTHESIS_PROMPT_MINIMAL,
+    "pr": SYNTHESIS_PROMPT_PR,
+    "description": SYNTHESIS_PROMPT_DESCRIPTION,
+}
+
+
 def synthesize_report(
     frame_analyses: list[dict] | None = None,
     video_analysis: str | None = None,
@@ -311,6 +443,7 @@ def synthesize_report(
     codebase_context: str | None = None,
     backend_name: str | None = None,
     verbose: bool = False,
+    output_mode: str = "default",
     **backend_kwargs,
 ) -> str:
     """Combine all analysis signals into structured notes.
@@ -330,7 +463,8 @@ def synthesize_report(
     else:
         frame_text = "(no visual analysis available)"
 
-    prompt = SYNTHESIS_PROMPT.format(
+    template = _OUTPUT_MODE_PROMPTS.get(output_mode, SYNTHESIS_PROMPT)
+    prompt = template.format(
         frame_analyses=frame_text,
         context=context or "(no additional context provided)",
         transcript=transcript or "(no audio / silent recording)",

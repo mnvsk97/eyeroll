@@ -40,6 +40,7 @@ def watch(
     verbose: bool = False,
     no_cache: bool = False,
     parallel: int = 1,
+    output_mode: str = "default",
 ) -> str:
     """Full pipeline: acquire media -> extract -> analyze -> report.
 
@@ -101,6 +102,7 @@ def watch(
                 context=context,
                 codebase_context=codebase_context,
                 verbose=verbose,
+                output_mode=output_mode,
             )
             return _wrap_report(report, cached["title"], cached["media_type"], context, backend_label)
 
@@ -137,6 +139,7 @@ def watch(
             context=context,
             codebase_context=codebase_context,
             verbose=verbose,
+            output_mode=output_mode,
         )
         return _wrap_report(report, title, intermediates["media_type"], context, backend_label)
     finally:

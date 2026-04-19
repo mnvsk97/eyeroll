@@ -241,7 +241,18 @@ def _validate_openai(api_key: str) -> None:
 @click.option("--output", "-o", default=None,
               help="Write output to file instead of stdout.")
 @click.option("--verbose", "-v", is_flag=True, help="Show progress details.")
-def watch(source, context, codebase_context, max_frames, backend, model, parallel, no_cache, output, verbose, base_url):
+@click.option("--no-context", "no_context", is_flag=True,
+              help="Quick mode: no init needed. Defaults to ollama if no API key found. Raw visual interpretation.")
+@click.option("--mode", "output_mode_flag",
+              type=click.Choice(["minimal", "descriptive"]),
+              default=None,
+              help="Output verbosity: 'minimal' (summary + next steps) or 'descriptive' (full, default).")
+@click.option("--create-pr", is_flag=True,
+              help="Format output as a GitHub PR description.")
+@click.option("--create-description", is_flag=True,
+              help="Format output as a standalone descriptive document.")
+def watch(source, context, codebase_context, max_frames, backend, model, parallel, no_cache, output, verbose, base_url,
+          no_context, output_mode_flag, create_pr, create_description):
     """Analyze a video/screenshot and produce structured notes.
 
     SOURCE can be a URL (YouTube, Loom, etc.) or a local file path.
@@ -265,6 +276,10 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
       eyeroll watch screenshot.png -b ollama -m qwen3-vl:2b
       eyeroll watch video.mp4 --backend groq
       eyeroll watch video.mp4 --backend openai-compat --base-url https://my-server/v1
+      eyeroll watch video.mp4 --no-context
+      eyeroll watch video.mp4 --mode minimal --context "what broke?"
+      eyeroll watch video.mp4 --create-pr --context "implement this feature"
+      eyeroll watch video.mp4 --create-description
     """
     from .watch import watch as run_watch
 
@@ -284,6 +299,30 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
         effective_backend = backend or os.environ.get("EYEROLL_BACKEND", "gemini")
         parallel = 1 if effective_backend == "ollama" else 3
 
+    # --no-context: default to ollama if no API key is available in the environment
+    if no_context and not backend:
+        api_key_vars = [
+            "GEMINI_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY",
+            "GROQ_API_KEY", "GROK_API_KEY", "CEREBRAS_API_KEY",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+        ]
+        if not any(os.environ.get(k) for k in api_key_vars):
+            backend = "ollama"
+
+    # Resolve output mode (precedence: --create-pr > --create-description > --mode > --no-context > default)
+    if create_pr:
+        output_mode = "pr"
+    elif create_description:
+        output_mode = "description"
+    elif output_mode_flag == "minimal":
+        output_mode = "minimal"
+    elif output_mode_flag == "descriptive":
+        output_mode = "descriptive"
+    elif no_context:
+        output_mode = "quick"
+    else:
+        output_mode = "default"
+
     # Resolve --codebase-context: if it's a file path, read it
     if codebase_context and os.path.isfile(os.path.expanduser(codebase_context)):
         with open(os.path.expanduser(codebase_context)) as f:
@@ -301,6 +340,7 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
             verbose=verbose,
             no_cache=no_cache,
             parallel=parallel,
+            output_mode=output_mode,
         )
 
         if output:

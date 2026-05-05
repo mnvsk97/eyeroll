@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-from eyeroll.watch import watch, _wrap_report, _cache_key, _cache_save, _cache_load
+from eyeroll.watch import watch, _wrap_report, _cache_key, _cache_save, _cache_load, extract_metadata
 
 
 def _make_mock_backend(supports_video=False, supports_audio=False, supports_batch_frames=False):
@@ -45,6 +45,47 @@ def test_wrap_report_with_context():
     result = _wrap_report("Body", "Title", "screenshot", "bug in login", "ollama")
     assert "**Context:** bug in login" in result
     assert "**Backend:** ollama" in result
+
+
+def test_wrap_report_includes_routing_metadata():
+    body = """## Video Analysis
+
+### Metadata
+```
+intent: documentation_update
+category: docs
+confidence: medium
+scope: in-context
+repo_guess: docs-site
+repo_confidence: high
+severity: low
+actionable: yes
+handoff_recommended: yes
+```
+"""
+    result = _wrap_report(body, "Docs Video", "video", None, "gemini")
+
+    assert "**Intent:** documentation_update" in result
+    assert "**Repo guess:** docs-site" in result
+    assert "**Handoff recommended:** yes" in result
+
+
+def test_extract_metadata_new_schema():
+    report = """### Metadata
+```
+intent: question_answering
+category: question
+confidence: high
+repo_guess: unknown
+handoff_recommended: no
+```
+"""
+
+    metadata = extract_metadata(report)
+
+    assert metadata["intent"] == "question_answering"
+    assert metadata["category"] == "question"
+    assert metadata["repo_guess"] == "unknown"
 
 
 # ---------------------------------------------------------------------------

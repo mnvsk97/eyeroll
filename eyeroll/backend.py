@@ -603,19 +603,13 @@ class OllamaBackend(Backend):
 class EyerollAPIBackend(Backend):
     """Routes analysis requests to the eyeroll hosted API.
 
-    Used automatically when EYEROLL_API_KEY is set in the environment.
-    The server handles backend selection and AI calls; the client just
-    sends the source URL/path and receives the report.
+    The hosted service is expected to sit behind platform auth such as
+    TrueFoundry endpoint authentication. This client does not manage eyeroll
+    API keys; it simply sends the source URL/path and receives the report.
     """
 
     def __init__(self):
-        self._api_key = os.environ.get("EYEROLL_API_KEY")
         self._api_url = os.environ.get("EYEROLL_API_URL", "https://api.eyeroll.dev").rstrip("/")
-        if not self._api_key:
-            raise AnalysisError(
-                "EYEROLL_API_KEY is not set. "
-                "Get a free key at https://api.eyeroll.dev or run `eyeroll init`."
-            )
 
     @property
     def supports_video(self) -> bool:
@@ -683,7 +677,6 @@ class EyerollAPIBackend(Backend):
                 f"{self._api_url}/api/watch",
                 data=parts_bytes,
                 headers={
-                    "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": f"multipart/form-data; boundary={boundary}",
                 },
                 method="POST",
@@ -695,7 +688,6 @@ class EyerollAPIBackend(Backend):
                 f"{self._api_url}/api/watch",
                 data=payload,
                 headers={
-                    "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
                 },
                 method="POST",
@@ -739,8 +731,7 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
     Args:
         name: Backend name. One of: 'gemini', 'openai', 'ollama', 'openrouter', 'groq',
               'grok', 'cerebras', 'openai-compat', 'eyeroll-api'.
-              Defaults to EYEROLL_BACKEND env var, then 'eyeroll-api' if EYEROLL_API_KEY
-              is set, otherwise 'gemini'.
+              Defaults to EYEROLL_BACKEND env var, otherwise 'gemini'.
         **kwargs: Passed to backend constructor (e.g., model, host, base_url).
     """
     global _current_backend
@@ -750,7 +741,7 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
     if name is None:
         name = os.environ.get("EYEROLL_BACKEND")
         if name is None:
-            name = "eyeroll-api" if os.environ.get("EYEROLL_API_KEY") else "gemini"
+            name = "gemini"
 
     if name == "gemini":
         _current_backend = GeminiBackend(**kwargs)

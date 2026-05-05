@@ -324,7 +324,7 @@ def _wrap_report(
 ) -> str:
     """Add metadata header to the report."""
     # Extract metadata block from the report if present
-    metadata = _extract_metadata(report)
+    metadata = extract_metadata(report)
 
     header = f"# eyeroll: {title}\n"
     header += f"**Source type:** {media_type}\n"
@@ -333,18 +333,23 @@ def _wrap_report(
         header += f"**Context:** {context}\n"
     if metadata:
         header += f"**Category:** {metadata.get('category', 'other')}\n"
+        header += f"**Intent:** {metadata.get('intent', metadata.get('category', 'other'))}\n"
         header += f"**Confidence:** {metadata.get('confidence', 'medium')}\n"
         header += f"**Scope:** {metadata.get('scope', 'out-of-context')}\n"
+        header += f"**Repo guess:** {metadata.get('repo_guess', 'unknown')}\n"
         header += f"**Severity:** {metadata.get('severity', 'low')}\n"
         header += f"**Actionable:** {metadata.get('actionable', 'no')}\n"
+        header += f"**Handoff recommended:** {metadata.get('handoff_recommended', metadata.get('actionable', 'no'))}\n"
     header += "\n---\n\n"
     return header + report
 
 
-def _extract_metadata(report: str) -> dict | None:
+def extract_metadata(report: str) -> dict | None:
     """Parse the metadata code block from the synthesis report."""
     import re
     match = re.search(r"```\s*\n(category:.*?)```", report, re.DOTALL)
+    if not match:
+        match = re.search(r"```\s*\n(intent:.*?)```", report, re.DOTALL)
     if not match:
         return None
     metadata = {}

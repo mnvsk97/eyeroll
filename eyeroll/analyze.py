@@ -86,19 +86,27 @@ Then synthesize into structured, actionable notes. Output EXACTLY this format:
 
 ### Metadata
 ```
-category: [bug | feature | other]
+intent: [bug_report | feature_request | question_answering | documentation_lookup | documentation_update | tutorial_or_howto | code_review | feature_demo | product_feedback | general_notes]
+category: [bug | feature | docs | question | other]
 confidence: [high | medium | low]
 scope: [in-context | out-of-context]
+repo_guess: [repo name if evident from codebase context or recording, otherwise unknown]
+repo_confidence: [high | medium | low]
 severity: [critical | moderate | low]
 actionable: [yes | no]
+handoff_recommended: [yes | no]
 ```
 
 Rules for metadata:
-- **category**: "bug" for bug reports, "feature" for feature demos/requests/tutorials, "other" for everything else
+- **intent**: choose the most specific intent from the allowed values. Use question_answering when the user wants an answer, documentation_lookup when the task is to read/find docs, and documentation_update when docs should be changed.
+- **category**: "bug" for bug reports, "feature" for feature demos/requests/tutorials, "docs" for documentation lookup/update, "question" for question answering, "other" for everything else
 - **confidence**: how confident you are in your analysis
 - **scope**: "in-context" if the video relates to the codebase described in the codebase context section, "out-of-context" if unrelated or no codebase context provided
+- **repo_guess**: infer the most likely repository only from visible evidence, provided context, or codebase context. Use "unknown" if there is not enough evidence.
+- **repo_confidence**: confidence in repo_guess
 - **severity**: "critical" for crashes/data loss/security issues, "moderate" for broken features/errors, "low" for cosmetic/minor issues. For non-bugs, base on importance.
 - **actionable**: "yes" if a coding agent can take concrete action (fix a bug, build a feature, create a skill), "no" if it's just informational
+- **handoff_recommended**: "yes" only when a coding agent should make code, docs, tests, or config changes. Use "no" for pure answers, demos, informational notes, or unclear tasks.
 
 ### Content Type: [bug report | feature demo | tutorial | feature request | code review | general notes]
 State what kind of content this is.
@@ -187,7 +195,22 @@ Based on content type, suggest the most appropriate actions:
 - Tutorial → create a reusable skill or automation from it
 - Feature request → spec it out, create implementation tasks
 - Code review → address feedback, update the PR
+- Documentation lookup → answer with the relevant docs or pointers, no PR unless docs are missing/wrong
+- Documentation update → edit docs and verify the rendered content
+- Question answering → answer the question directly, no PR handoff unless implementation is required
 - General → summarize and share with relevant people
+
+### Agent Handoff
+Only include this section when handoff_recommended is "yes".
+
+When included, provide:
+- **Task type**: the intent
+- **Likely repo**: repo_guess and repo_confidence
+- **Goal**: what the coding agent should change
+- **Evidence from recording**: exact visible/audio evidence, with timestamps where available
+- **Investigation notes**: search patterns, files from codebase context only, or clearly labeled hypotheses
+- **Expected PR contents**: code/docs/tests/config changes expected
+- **Verification**: concrete checks after the change
 
 ### Clarifying Questions
 List any questions that would help understand what was shown better.
@@ -201,6 +224,7 @@ Rules:
 - If you're unsure about something, say "unclear" rather than guessing
 - If the context text adds useful information, incorporate it
 - Do NOT assume this is a bug — determine content type from evidence first
+- Do NOT recommend agent handoff for pure questions or informational demos
 - Keep it concise and actionable
 - NEVER state a file path as fact unless it appears in the codebase context section. If no codebase context is available, ALL file paths are hypotheses — say so explicitly.
 - This report will be read by a coding agent, not a human. Be precise and codebase-oriented when relevant, but don't force technical analysis on non-technical content."""

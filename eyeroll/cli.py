@@ -228,7 +228,7 @@ def _validate_openai(api_key: str) -> None:
 @click.option("--backend", "-b",
               type=click.Choice(["gemini", "openai", "ollama", "openrouter", "groq", "grok", "cerebras", "openai-compat", "eyeroll-api"]),
               default=None,
-              help="Vision backend. Defaults to EYEROLL_BACKEND env var, then eyeroll-api if EYEROLL_API_KEY is set, else gemini.")
+              help="Vision backend. Defaults to EYEROLL_BACKEND env var, else gemini.")
 @click.option("--base-url", default=None,
               help="Base URL for --backend openai-compat (e.g. https://my-server/v1).")
 @click.option("--model", "-m", default=None,
@@ -256,7 +256,7 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
 
     \b
     Backends:
-      eyeroll-api  Hosted eyeroll API (default when EYEROLL_API_KEY is set)
+      eyeroll-api  Hosted eyeroll API (expects platform auth in deployment)
       gemini       Google Gemini Flash API (requires GEMINI_API_KEY)
       openai       OpenAI GPT-4o (requires OPENAI_API_KEY)
       ollama       Local models via Ollama (e.g., qwen3-vl, no API key needed)
@@ -293,7 +293,7 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
     if parallel is None:
         effective_backend = backend or os.environ.get("EYEROLL_BACKEND")
         if effective_backend is None:
-            effective_backend = "eyeroll-api" if os.environ.get("EYEROLL_API_KEY") else "gemini"
+            effective_backend = "gemini"
         parallel = 1 if effective_backend in ("ollama", "eyeroll-api") else 3
 
     # Resolve --codebase-context: if it's a file path, read it

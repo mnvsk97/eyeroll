@@ -85,26 +85,6 @@
       margin-bottom: 44px;
     }
 
-    /* Signup form */
-    .signup-form {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .signup-form input[type="email"] {
-      flex: 1;
-      min-width: 240px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: 14px;
-      padding: 12px 16px;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    .signup-form input[type="email"]:focus { border-color: #444; }
-    .signup-form input[type="email"]::placeholder { color: var(--muted); }
     .btn {
       background: var(--accent);
       color: #000;
@@ -120,16 +100,6 @@
     .btn:hover { opacity: 0.85; }
     .btn:disabled { opacity: 0.45; cursor: default; }
 
-    /* Key result */
-    .key-result {
-      display: none;
-      margin-top: 20px;
-      background: var(--code-bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px 20px;
-    }
-    .key-result.show { display: block; }
     .key-label {
       font-size: 11px;
       letter-spacing: 0.1em;
@@ -137,18 +107,6 @@
       color: var(--muted);
       margin-bottom: 8px;
     }
-    .key-value {
-      font-family: "SF Mono", "Fira Code", Menlo, monospace;
-      font-size: 14px;
-      color: var(--green);
-      word-break: break-all;
-    }
-    .key-hint {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 10px;
-    }
-
     /* Divider */
     .divider {
       border: none;
@@ -311,34 +269,23 @@
 
     <!-- Hero -->
     <section class="hero">
-      <p class="eyebrow">Open beta · Free</p>
+      <p class="eyebrow">Hosted on TrueFoundry</p>
       <h1>AI eyes for<br>your videos</h1>
       <p class="tagline">
         Drop a Loom, YouTube link, or local video. Get structured notes
         your coding agent can act on — fix bugs, build features, create skills.
       </p>
 
-      <!-- Signup -->
-      <form class="signup-form" id="signupForm">
-        <input type="email" id="emailInput" placeholder="you@example.com" required autocomplete="email">
-        <button class="btn" type="submit" id="signupBtn">Get free API key →</button>
-      </form>
-      <p class="error-msg" id="signupError"></p>
-
-      <div class="key-result" id="keyResult">
-        <p class="key-label">Your API key</p>
-        <p class="key-value" id="keyValue"></p>
-        <p class="key-hint">Save this — it won't be shown again. Set <code>EYEROLL_API_KEY</code> in your env.</p>
-      </div>
+      <a class="btn" href="#try" style="display:inline-block;text-decoration:none;">Analyze with platform auth</a>
     </section>
 
     <hr class="divider">
 
     <!-- Try it -->
     <section id="try">
-      <p class="section-label">Try it — no login needed</p>
+      <p class="section-label">Try it</p>
       <p style="font-size:14px;color:var(--muted);margin-bottom:24px;">
-        Upload a video or paste a URL. 3 free analyses per day.
+        Upload a video or paste a URL. Access is handled by the authenticated deployment route.
       </p>
 
       <div class="try-form" id="tryForm">
@@ -394,22 +341,23 @@
         <div class="step">
           <span class="step-num">01</span>
           <div class="step-body">
-            <p class="step-title">Get your key</p>
-            <p class="step-desc">Enter your email above. Your API key is issued instantly.</p>
-            <pre><span class="token-comment"># or via curl</span>
-curl -s -X POST https://api.eyeroll.dev/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com"}'</pre>
+            <p class="step-title">Authenticate through TrueFoundry</p>
+            <p class="step-desc">Expose eyeroll behind TrueFoundry endpoint authentication. eyeroll does not issue or rotate its own keys.</p>
+            <pre><span class="token-comment"># deploy eyeroll as an authenticated service</span>
+<span class="token-key">POST</span> <span class="token-val">/api/watch</span></pre>
           </div>
         </div>
 
         <div class="step">
           <span class="step-num">02</span>
           <div class="step-body">
-            <p class="step-title">Set your key</p>
-            <p class="step-desc">Add it to your shell or project <code>.env</code>.</p>
-            <pre><span class="token-key">export EYEROLL_API_KEY</span>=<span class="token-val">er_your_key_here</span>
-<span class="token-key">export EYEROLL_API_URL</span>=<span class="token-val">https://api.eyeroll.dev</span></pre>
+            <p class="step-title">Send video context</p>
+            <p class="step-desc">Pass a URL or upload a file with optional surrounding context and repo context.</p>
+            <pre>{
+  "source": "https://loom.com/share/abc123",
+  "context": "checkout breaks after applying coupon",
+  "repo_context": "optional repo inventory"
+}</pre>
           </div>
         </div>
 
@@ -418,15 +366,10 @@ curl -s -X POST https://api.eyeroll.dev/signup \
           <div class="step-body">
             <p class="step-title">Watch</p>
             <p class="step-desc">
-              Run via the CLI or send a raw HTTP request. No Gemini or OpenAI key needed.
+              The response includes the markdown report plus routing fields for agents.
             </p>
-            <pre><span class="token-comment"># CLI (auto-routes when EYEROLL_API_KEY is set)</span>
-<span class="token-cmd">eyeroll watch</span> https://loom.com/share/abc123
-<span class="token-cmd">eyeroll watch</span> ./recording.mp4 --context "checkout broken"
-
-<span class="token-comment"># or raw HTTP</span>
+            <pre><span class="token-comment"># raw HTTP through the authenticated endpoint</span>
 curl -s -X POST https://api.eyeroll.dev/api/watch \
-  -H "Authorization: Bearer $EYEROLL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"source":"https://loom.com/share/abc123"}'</pre>
           </div>
@@ -441,20 +384,12 @@ curl -s -X POST https://api.eyeroll.dev/api/watch \
     <section>
       <p class="section-label">Claude Code skills</p>
       <p style="font-size:14px;color:var(--muted);margin-bottom:24px;">
-        Once your key is set, these slash commands work inside Claude Code sessions.
+        Claude and coding-agent integrations should call the hosted watch endpoint through the authenticated platform route.
       </p>
       <div class="skills">
         <div class="skill-card">
           <p class="skill-name">/eyeroll:api-watch &lt;url&gt;</p>
-          <p class="skill-desc">Analyze a video URL via the hosted API. Returns a structured report.</p>
-        </div>
-        <div class="skill-card">
-          <p class="skill-name">/eyeroll:api-usage</p>
-          <p class="skill-desc">Check how many analyses you've used today and when the limit resets.</p>
-        </div>
-        <div class="skill-card">
-          <p class="skill-name">/eyeroll:api-rotate-key</p>
-          <p class="skill-desc">Rotate your API key. Old key is immediately invalidated.</p>
+          <p class="skill-desc">Analyze a video URL via the hosted API. Returns intent, repo guess, handoff recommendation, and report.</p>
         </div>
       </div>
     </section>
@@ -463,7 +398,7 @@ curl -s -X POST https://api.eyeroll.dev/api/watch \
 
     <!-- Footer -->
     <footer>
-      <p class="footer-note">20 free analyses per day</p>
+      <p class="footer-note">Authentication and access are handled by TrueFoundry.</p>
       <div class="footer-links">
         <a href="https://github.com/mnvsk97/eyeroll" target="_blank" rel="noopener">GitHub</a>
         <a href="https://github.com/mnvsk97/eyeroll/issues" target="_blank" rel="noopener">Issues</a>
@@ -541,7 +476,7 @@ curl -s -X POST https://api.eyeroll.dev/api/watch \
       if (ctx) fd.append('context', ctx);
 
       try {
-        const res = await fetch('/api/try', { method: 'POST', body: fd });
+        const res = await fetch('/api/watch', { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Analysis failed.');
         showTryResult(data.report);
@@ -557,7 +492,7 @@ curl -s -X POST https://api.eyeroll.dev/api/watch \
       const ctx = document.getElementById('tryContext').value.trim();
 
       try {
-        const res = await fetch('/api/try', {
+        const res = await fetch('/api/watch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ source: url, context: ctx || null }),
@@ -573,42 +508,6 @@ curl -s -X POST https://api.eyeroll.dev/api/watch \
     function copyReport() {
       navigator.clipboard.writeText(_reportText).catch(() => {});
     }
-
-    /* ---- Signup ---- */
-    const form = document.getElementById('signupForm');
-    const btn = document.getElementById('signupBtn');
-    const keyResult = document.getElementById('keyResult');
-    const keyValue = document.getElementById('keyValue');
-    const errorMsg = document.getElementById('signupError');
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('emailInput').value.trim();
-      if (!email) return;
-
-      btn.disabled = true;
-      btn.textContent = 'Getting key…';
-      errorMsg.classList.remove('show');
-      keyResult.classList.remove('show');
-
-      try {
-        const res = await fetch('/signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Something went wrong.');
-        keyValue.textContent = data.api_key;
-        keyResult.classList.add('show');
-        btn.textContent = 'Done ✓';
-      } catch (err) {
-        errorMsg.textContent = err.message;
-        errorMsg.classList.add('show');
-        btn.disabled = false;
-        btn.textContent = 'Get free API key →';
-      }
-    });
   </script>
 </body>
 </html>

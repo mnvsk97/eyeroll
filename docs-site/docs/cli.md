@@ -36,7 +36,7 @@ eyeroll watch <source> [options]
 |---|---|---|---|
 | `--context` | `-c` | None | Additional context text |
 | `--codebase-context` | `-cc` | None | Codebase context (inline text or path to file) |
-| `--backend` | `-b` | `EYEROLL_BACKEND` or `gemini` | Backend: `gemini`, `openai`, `ollama`, `openrouter`, `groq`, `grok`, `cerebras`, `openai-compat` |
+| `--backend` | `-b` | `EYEROLL_BACKEND` or `gemini` | Backend: `gemini`, `openai`, `ollama`, `openrouter`, `groq`, `grok`, `cerebras`, `openai-compat`, `eyeroll-api` |
 | `--base-url` | | None | Base URL for `openai-compat` backend |
 | `--model` | `-m` | Backend default | Model override |
 | `--max-frames` | | 20 | Maximum key frames to analyze |
@@ -72,6 +72,9 @@ eyeroll watch ./bug.mp4 -o report.md
 
 # Force fresh analysis (skip cache)
 eyeroll watch ./bug.mp4 --no-cache
+
+# Use a hosted eyeroll API endpoint
+EYEROLL_API_URL=https://eyeroll.example.com eyeroll watch https://loom.com/share/abc123 -b eyeroll-api
 ```
 
 !!! note "Model inference"
@@ -130,6 +133,7 @@ eyeroll history clear --yes
 | Variable | Description | Default |
 |---|---|---|
 | `EYEROLL_BACKEND` | Default backend | `gemini` |
+| `EYEROLL_API_URL` | Hosted eyeroll API URL for `--backend eyeroll-api` | `https://api.eyeroll.dev` |
 | `GEMINI_API_KEY` | Gemini API key | |
 | `OPENAI_API_KEY` | OpenAI API key (also fallback for compatible providers) | |
 | `OPENROUTER_API_KEY` | OpenRouter API key | |

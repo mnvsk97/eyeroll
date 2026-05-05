@@ -12,7 +12,7 @@ packages = ["eyeroll"]
 
 [[commands]]
 name = "init"
-description = "Set up API keys and configure eyeroll backends"
+description = "Configure local eyeroll backends and codebase context"
 file = "commands/init.md"
 
 [[commands]]

@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e '.[dev]'
+          pip install -e '.[dev,server]'
 
       - name: Run tests
         run: python -m pytest -q
@@ -57,7 +57,7 @@ jobs:
         run: /tmp/install-check-venv/bin/eyeroll --help
 
   smoke-test:
-    needs: test
+    needs: [test, install-check]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     timeout-minutes: 5
@@ -90,7 +90,7 @@ jobs:
         run: pytest tests/test_integration.py -v -m integration
 
   publish:
-    needs: test
+    needs: [test, install-check]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: pypi

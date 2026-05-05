@@ -52,10 +52,12 @@ eyeroll determines what kind of content the video shows:
 | Content Type | Example | Analysis Focus |
 |---|---|---|
 | **Bug report** | Error on screen, broken behavior | Expected vs actual, fix directions, search patterns |
-| **Feature demo** | Working feature walkthrough | Capabilities shown, codebase relevance |
+| **Feature request** | Mockup or desired behavior | What's requested, implementation notes, acceptance criteria |
+| **Question / answer request** | User asks how something works | Direct answer, evidence, follow-up questions |
+| **Documentation lookup/update** | Docs are being read or requested | Relevant docs, missing docs, suggested update |
 | **Tutorial** | Step-by-step how-to | Process, tools used, skill automation potential |
-| **Feature request** | Mockup or desired behavior | What's requested, how it differs from current |
 | **Code review** | PR diff walkthrough | Files reviewed, concerns noted |
+| **Feature demo** | Working feature walkthrough | Capabilities shown, codebase relevance |
 | **General notes** | Meeting, brainstorm | Key takeaways, action items |
 
 ### Report metadata
@@ -63,16 +65,23 @@ eyeroll determines what kind of content the video shows:
 Every report starts with a structured metadata block:
 
 ```
-category: bug | feature | other
+intent: bug_report | feature_request | question_answering | documentation_lookup | documentation_update | tutorial_or_howto | code_review | feature_demo | product_feedback | general_notes
+category: bug | feature | docs | question | other
 confidence: high | medium | low
 scope: in-context | out-of-context
+repo_guess: <repo name or unknown>
+repo_confidence: high | medium | low
 severity: critical | moderate | low
 actionable: yes | no
+handoff_recommended: yes | no
 ```
 
-- **category**: bug for bug reports, feature for demos/requests/tutorials, other for everything else
+- **intent**: specific content classification used to decide whether this is a bug, feature request, question, docs task, tutorial, review, or notes
+- **category**: broad grouping used by older workflows
 - **scope**: in-context if the video relates to the current codebase, out-of-context otherwise
+- **repo_guess**: best repo match from provided codebase context, or `unknown` when unsure
 - **actionable**: yes if a coding agent can take concrete action, no if informational only
+- **handoff_recommended**: yes only when another coding agent should make code, docs, test, or config changes
 
 ### Common sections
 
@@ -80,7 +89,7 @@ Every report includes:
 
 | Section | Content |
 |---|---|
-| **Metadata** | Category, confidence, scope, severity, actionable |
+| **Metadata** | Intent, category, confidence, scope, repo guess, handoff recommendation |
 | **Content Type** | Classification |
 | **Summary** | One-sentence description of what the video shows |
 | **What's Happening** | Step-by-step walkthrough |
@@ -90,6 +99,7 @@ Every report includes:
 | **Environment Clues** | Browser, OS, URLs, version numbers |
 | **Analysis** | Adapted per content type (see above) |
 | **Suggested Next Steps** | Context-aware recommendations |
+| **Agent Handoff** | Included only when a code/docs/test/config change is recommended |
 | **Clarifying Questions** | Only if something is genuinely unclear |
 
 ### Evidence confidence tiers (bug reports)

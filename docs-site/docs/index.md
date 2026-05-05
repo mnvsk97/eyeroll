@@ -80,10 +80,10 @@ eyeroll history
 5. Cache intermediates (reuse on next run)
     |
 6. Synthesize report with codebase context:
-   - Metadata: category, confidence, scope, severity, actionable
-   - Bug Description + Reproduction Steps
-   - Fix Directions (Visible / Codebase-informed / Hypothesis)
-   - Search patterns for the coding agent
+   - Metadata: intent, category, confidence, scope, repo guess, handoff recommendation
+   - Bug, feature, question, docs, tutorial, review, or notes sections as appropriate
+   - Agent handoff only when a code/docs/test/config change is actually useful
+   - Search patterns and verification steps for coding agents when relevant
     |
 7. Present summary to user
     |

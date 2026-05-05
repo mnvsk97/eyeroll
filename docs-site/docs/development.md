@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/mnvsk97/eyeroll.git
 cd eyeroll
-pip install -e '.[dev,all]'
+pip install -e '.[dev,all,server]'
 ```
 
 Or with uv:
@@ -32,7 +32,7 @@ pytest tests/test_integration.py -v -m integration
 !!! warning "Integration tests"
     Integration tests hit real APIs and download real videos. They require valid API keys and are skipped by default in CI. Run them manually before releases.
 
-The test suite has 269 unit tests and 8 integration tests.
+The test suite includes unit, pipeline, server, MCP, and integration tests. Run the default suite before every release, then run marked integration tests when credentials are available.
 
 ## Test patterns
 
@@ -52,7 +52,9 @@ eyeroll/                          # Python CLI package
   backend.py                      # Backend ABC + Gemini, OpenAI, Ollama implementations
   watch.py                        # Pipeline orchestrator, caching
   history.py                      # Cache listing, retrieval, clearing
+  mcp_server.py                   # Hosted/local MCP tool wrapper
   cli.py                          # Click CLI (init, watch, history)
+  server/                         # Lean hosted API (/health, /api/watch, /api/queue)
 
 plugins/eyeroll/                  # Claude Code plugin
   .claude-plugin/plugin.json      # Plugin manifest
@@ -107,7 +109,8 @@ python -m build
 
 ## Release checklist
 
-1. Bump version in `pyproject.toml` and `plugins/eyeroll/.claude-plugin/plugin.json`
+1. Bump version in `pyproject.toml`, `plugins/eyeroll/plugin.toml`, `plugins/eyeroll/.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`
 2. Run full test suite: `pytest`
 3. Run integration tests: `pytest tests/test_integration.py -v -m integration`
-4. Push to `main` -- CI publishes to PyPI automatically
+4. Build and install the wheel locally: `python -m build`, then smoke test `eyeroll --help`
+5. Push to `main` -- CI publishes to PyPI automatically when the version is new

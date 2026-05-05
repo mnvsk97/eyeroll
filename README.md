@@ -95,10 +95,10 @@ eyeroll history
 5. Cache intermediates (reuse on next run)
     ↓
 6. Synthesize report with codebase context:
-   - Metadata: category, confidence, scope, severity, actionable
-   - Bug Description + Reproduction Steps
-   - Fix Directions (Visible / Codebase-informed / Hypothesis)
-   - Search patterns for the coding agent
+   - Metadata: intent, category, confidence, scope, repo guess, handoff recommendation
+   - Bug, feature, question, docs, tutorial, review, or notes sections as appropriate
+   - Agent handoff only when a code/docs/test/config change is actually useful
+   - Search patterns and verification steps for coding agents when relevant
     ↓
 7. Present summary to user
     ↓
@@ -119,7 +119,7 @@ eyeroll history
 | **cerebras** | Multi-frame batch | No | CEREBRAS_API_KEY | cheap | Fast inference |
 | **openai-compat** | Multi-frame batch | No | any env var | varies | Custom/self-hosted endpoints |
 
-Ollama auto-installs if not found (macOS/Linux).
+Ollama runs locally. Install and start Ollama separately, then eyeroll can pull the selected model on first use.
 
 ## Codebase context
 
@@ -154,7 +154,7 @@ eyeroll/
     video-to-skill/      ← activated by "create a skill from this video"
   eyeroll/               ← Python CLI package
     cli.py, watch.py, analyze.py, extract.py, backend.py, context.py, cost.py, history.py
-  tests/                 ← 269 unit + 8 integration tests
+  tests/                 ← unit, pipeline, server, MCP, and integration tests
 ```
 
 ## Supported inputs
@@ -170,7 +170,7 @@ eyeroll/
 ```bash
 git clone https://github.com/mnvsk97/eyeroll.git
 cd eyeroll
-pip install -e '.[dev,all]'
+pip install -e '.[dev,all,server]'
 pytest                                                    # unit tests
 pytest tests/test_integration.py -v -m integration        # real API tests
 ```

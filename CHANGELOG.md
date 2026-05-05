@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- **Hosted API simplification**: Removed eyeroll-owned signup, API key management, usage, and trial routes. Hosted deployments now expose the product API and leave access control to the deployment platform.
+- **Structured hosted watch response**: `/api/watch` now returns `report`, `intent`, `repo_guess`, `handoff_recommended`, and `confidence`.
+- **Richer task routing**: Reports classify bug reports, feature requests, question answering, documentation lookup/update, tutorials, code reviews, feature demos, product feedback, and general notes.
+- **Agent handoff**: Reports include an Agent Handoff section only when code, docs, tests, or config changes are recommended.
+- **Lean MCP surface**: `eyeroll-mcp` now exposes only `watch_video`.
+- **Plugin cleanup**: Removed signup/key-management slash commands and updated hosted API watch guidance.
+
 ## 0.5.0
 
 - **Auto-discover codebase context**: Automatically finds CLAUDE.md, AGENTS.md, .cursorrules, codex.md, and other coding tool context files at watch-time. No more manual `--codebase-context` needed.

@@ -55,6 +55,7 @@ nav:
   - Backends:
       - Overview: backends/overview.md
       - Gemini: backends/gemini.md
+      - TwelveLabs: backends/twelvelabs.md
       - OpenAI: backends/openai.md
       - Ollama: backends/ollama.md
       - OpenRouter: backends/openrouter.md

@@ -32,6 +32,13 @@ pip install eyeroll[all]         # everything
 
 Picks your backend, configures API key, and generates codebase context — all in one step.
 
+For TwelveLabs directly:
+
+```bash
+export TWELVE_LABS_API_KEY=your-key-here
+eyeroll watch ./bug.mp4 --backend twelvelabs
+```
+
 ## Commands
 
 | Command | What it does |
@@ -122,6 +129,8 @@ eyeroll history
 | **grok** | Multi-frame batch | No | GROK_API_KEY | varies | xAI models |
 | **cerebras** | Multi-frame batch | No | CEREBRAS_API_KEY | cheap | Fast inference |
 | **openai-compat** | Multi-frame batch | No | any env var | varies | Custom/self-hosted endpoints |
+
+TwelveLabs uploads the video as an asset and asks Pegasus to generate the final structured report directly. It is intentionally not a frame-by-frame fallback backend; for videos beyond the direct-upload limits, use Gemini or OpenAI.
 
 Ollama runs locally. Install and start Ollama separately, then eyeroll can pull the selected model on first use.
 

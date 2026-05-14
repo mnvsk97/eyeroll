@@ -146,6 +146,76 @@ def test_watch_video_direct_upload(tmp_video_path):
     assert "# eyeroll:" in result
 
 
+def test_watch_twelvelabs_direct_final_report(tmp_video_path):
+    """TwelveLabs generates the final structured report directly from video."""
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=False)
+    report = """## Video Analysis
+
+### Metadata
+```
+intent: bug_report
+category: bug
+confidence: high
+repo_guess: app
+handoff_recommended: yes
+```
+"""
+    mock_backend.analyze_video.return_value = report
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch._cache_save") as mock_cache_save, \
+         patch("eyeroll.watch.acquire", return_value={
+             "file_path": tmp_video_path,
+             "media_type": "video",
+             "source_url": None,
+             "title": "test_video",
+         }), \
+         patch("eyeroll.watch.get_video_duration", return_value=30.0), \
+         patch("eyeroll.watch.os.path.getsize", return_value=5 * 1024 * 1024), \
+         patch("eyeroll.watch.has_audio_track", return_value=False), \
+         patch("eyeroll.watch.synthesize_report") as mock_sr, \
+         patch("eyeroll.watch.fmt_timestamp", return_value="00:30"):
+        result = watch(
+            tmp_video_path,
+            context="checkout broken",
+            codebase_context="repo context",
+            backend_name="twelvelabs",
+        )
+
+    assert "# eyeroll: test_video" in result
+    assert "**Backend:** twelvelabs" in result
+    assert "intent: bug_report" in result
+    mock_backend.analyze_video.assert_called_once()
+    assert "checkout broken" in mock_backend.analyze_video.call_args[0][1]
+    assert "repo context" in mock_backend.analyze_video.call_args[0][1]
+    mock_sr.assert_not_called()
+    mock_cache_save.assert_not_called()
+
+
+def test_watch_twelvelabs_rejects_frame_fallback(tmp_video_path):
+    """TwelveLabs should fail clearly instead of falling into image-frame mode."""
+    mock_backend = _make_mock_backend(supports_video=True, supports_audio=False)
+
+    with patch("eyeroll.watch.get_backend", return_value=mock_backend), \
+         patch("eyeroll.watch.reset_backend"), \
+         patch("eyeroll.watch._cache_load", return_value=None), \
+         patch("eyeroll.watch.acquire", return_value={
+             "file_path": tmp_video_path,
+             "media_type": "video",
+             "source_url": None,
+             "title": "test_video",
+         }), \
+         patch("eyeroll.watch.get_video_duration", return_value=4000.0), \
+         patch("eyeroll.watch.os.path.getsize", return_value=5 * 1024 * 1024), \
+         patch("eyeroll.watch.extract_key_frames") as mock_extract:
+        with pytest.raises(RuntimeError, match="TwelveLabs direct analysis"):
+            watch(tmp_video_path, backend_name="twelvelabs")
+
+    mock_extract.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # watch() with video — frame-by-frame (ollama, no video support)
 # ---------------------------------------------------------------------------

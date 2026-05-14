@@ -26,10 +26,11 @@ def init():
     click.echo("Which backend do you want to use?\n")
     click.echo("  1. gemini  — Google Gemini Flash API (fast, cheap, best quality)")
     click.echo("  2. openai  — OpenAI GPT-4o (great vision, Whisper audio)")
-    click.echo("  3. ollama  — Local models via Ollama (private, no API key)\n")
+    click.echo("  3. twelvelabs — TwelveLabs direct video understanding")
+    click.echo("  4. ollama  — Local models via Ollama (private, no API key)\n")
 
-    choice = click.prompt("Choose", type=click.Choice(["1", "2", "3"]), default="1")
-    backend_map = {"1": "gemini", "2": "openai", "3": "ollama"}
+    choice = click.prompt("Choose", type=click.Choice(["1", "2", "3", "4"]), default="1")
+    backend_map = {"1": "gemini", "2": "openai", "3": "twelvelabs", "4": "ollama"}
     backend = backend_map[choice]
 
     if backend == "ollama":
@@ -42,8 +43,10 @@ def init():
 
     if backend == "gemini":
         _setup_gemini()
-    else:
+    elif backend == "openai":
         _setup_openai()
+    else:
+        _setup_twelvelabs()
 
     _save_env("EYEROLL_BACKEND", backend)
     click.secho("Setup complete. Run `eyeroll watch <video>` to get started.", fg="green")
@@ -124,6 +127,29 @@ def _setup_openai():
     click.echo("Validating API key...")
     try:
         _validate_openai(api_key)
+    except Exception as e:
+        click.secho(f"Validation failed: {e}", fg="red", err=True)
+        raise SystemExit(1)
+
+
+def _setup_twelvelabs():
+    """Configure TwelveLabs API key."""
+    existing_key = os.environ.get("TWELVE_LABS_API_KEY") or os.environ.get("TWELVELABS_API_KEY")
+    if existing_key:
+        if not click.confirm("\nTWELVE_LABS_API_KEY already set. Overwrite?", default=False):
+            return
+
+    api_key = click.prompt(
+        "Enter your TwelveLabs API key\n"
+        "  Get one from the TwelveLabs playground API Keys page\n"
+        "  (input is hidden)",
+        hide_input=True,
+    )
+    _save_env("TWELVE_LABS_API_KEY", api_key)
+    os.environ["TWELVE_LABS_API_KEY"] = api_key
+
+    try:
+        _validate_twelvelabs(api_key)
     except Exception as e:
         click.secho(f"Validation failed: {e}", fg="red", err=True)
         raise SystemExit(1)
@@ -219,6 +245,19 @@ def _validate_openai(api_key: str) -> None:
         raise RuntimeError("API key accepted but got empty response.")
 
 
+def _validate_twelvelabs(api_key: str) -> None:
+    """Validate that the TwelveLabs SDK is installed and accepts construction."""
+    try:
+        from twelvelabs import TwelveLabs
+    except ImportError:
+        click.secho(
+            "TwelveLabs SDK not installed. Run: pip install eyeroll[twelvelabs]",
+            fg="red", err=True,
+        )
+        raise SystemExit(1)
+    TwelveLabs(api_key=api_key)
+
+
 @cli.command()
 @click.argument("source")
 @click.option("--context", "-c", default=None,
@@ -226,7 +265,7 @@ def _validate_openai(api_key: str) -> None:
 @click.option("--max-frames", default=20, show_default=True,
               help="Maximum key frames to analyze from video.")
 @click.option("--backend", "-b",
-              type=click.Choice(["gemini", "openai", "ollama", "openrouter", "groq", "grok", "cerebras", "openai-compat", "eyeroll-api"]),
+              type=click.Choice(["gemini", "twelvelabs", "openai", "ollama", "openrouter", "groq", "grok", "cerebras", "openai-compat", "eyeroll-api"]),
               default=None,
               help="Vision backend. Defaults to EYEROLL_BACKEND env var, else gemini.")
 @click.option("--base-url", default=None,
@@ -258,6 +297,7 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
     Backends:
       eyeroll-api  Hosted eyeroll API (expects platform auth in deployment)
       gemini       Google Gemini Flash API (requires GEMINI_API_KEY)
+      twelvelabs   TwelveLabs direct video understanding (requires TWELVE_LABS_API_KEY)
       openai       OpenAI GPT-4o (requires OPENAI_API_KEY)
       ollama       Local models via Ollama (e.g., qwen3-vl, no API key needed)
       openrouter   OpenRouter API (requires OPENROUTER_API_KEY)
@@ -272,6 +312,7 @@ def watch(source, context, codebase_context, max_frames, backend, model, paralle
       eyeroll watch ./recording.mp4 --context "checkout broken after PR #432"
       eyeroll watch demo.mp4 -c "create a skill from this" --backend ollama
       eyeroll watch screenshot.png -b ollama -m qwen3-vl:2b
+      eyeroll watch video.mp4 --backend twelvelabs
       eyeroll watch video.mp4 --backend groq
       eyeroll watch video.mp4 --backend openai-compat --base-url https://my-server/v1
     """

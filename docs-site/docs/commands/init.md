@@ -19,6 +19,7 @@ Checks if `eyeroll` CLI is installed. If not, asks which backend you want and in
 | Choice | Install command |
 |---|---|
 | Gemini | `pip install eyeroll[gemini,download]` |
+| TwelveLabs | `pip install eyeroll[twelvelabs,download]` |
 | OpenAI / OpenRouter / Groq / Grok / Cerebras / openai-compat | `pip install eyeroll[openai,download]` |
 | Ollama | `pip install eyeroll[download]` |
 
@@ -26,8 +27,8 @@ Checks if `eyeroll` CLI is installed. If not, asks which backend you want and in
 
 Runs `eyeroll init` interactively:
 
-- Prompts for backend choice (Gemini, OpenAI, Ollama, OpenRouter, Groq, Grok, Cerebras, openai-compat)
-- For Gemini/OpenAI: prompts for API key and validates it
+- Prompts for backend choice (Gemini, TwelveLabs, OpenAI, Ollama, OpenRouter, Groq, Grok, Cerebras, openai-compat)
+- For Gemini/TwelveLabs/OpenAI: prompts for API key and validates the local SDK setup
 - For Ollama: verifies Ollama is running (or starts it)
 - Saves configuration to `~/.eyeroll/.env`
 

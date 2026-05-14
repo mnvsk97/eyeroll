@@ -208,11 +208,29 @@ def test_init_openai(runner, tmp_path):
         assert "EYEROLL_BACKEND=openai" in content
 
 
+def test_init_twelvelabs(runner, tmp_path):
+    env_path = str(tmp_path / ".eyeroll" / ".env")
+
+    mock_twelvelabs_mod = MagicMock()
+
+    with patch("eyeroll.cli._ENV_PATH", env_path), \
+         patch.dict("sys.modules", {"twelvelabs": mock_twelvelabs_mod}), \
+         patch.dict(os.environ, {"TWELVE_LABS_API_KEY": "", "TWELVELABS_API_KEY": ""}, clear=False):
+        result = runner.invoke(cli, ["init"], input="3\ntl-test-key-789\n")
+
+    assert result.exit_code == 0
+    assert "Setup complete" in result.output
+    with open(env_path) as f:
+        content = f.read()
+        assert "TWELVE_LABS_API_KEY=tl-test-key-789" in content
+        assert "EYEROLL_BACKEND=twelvelabs" in content
+
+
 def test_init_ollama(runner, tmp_path):
     env_path = str(tmp_path / ".eyeroll" / ".env")
 
     with patch("eyeroll.cli._ENV_PATH", env_path):
-        result = runner.invoke(cli, ["init"], input="3\n")
+        result = runner.invoke(cli, ["init"], input="4\n")
 
     assert result.exit_code == 0
     assert "Setup complete" in result.output

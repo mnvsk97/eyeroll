@@ -36,7 +36,7 @@ eyeroll watch <source> [options]
 |---|---|---|---|
 | `--context` | `-c` | None | Additional context text |
 | `--codebase-context` | `-cc` | None | Codebase context (inline text or path to file) |
-| `--backend` | `-b` | `EYEROLL_BACKEND` or `gemini` | Backend: `gemini`, `openai`, `ollama`, `openrouter`, `groq`, `grok`, `cerebras`, `openai-compat`, `eyeroll-api` |
+| `--backend` | `-b` | `EYEROLL_BACKEND` or `gemini` | Backend: `gemini`, `twelvelabs`, `openai`, `ollama`, `openrouter`, `groq`, `grok`, `cerebras`, `openai-compat`, `eyeroll-api` |
 | `--base-url` | | None | Base URL for `openai-compat` backend |
 | `--model` | `-m` | Backend default | Model override |
 | `--max-frames` | | 20 | Maximum key frames to analyze |
@@ -66,6 +66,9 @@ eyeroll watch ./bug.mp4 -p 4 --verbose
 
 # Use Ollama with a specific model
 eyeroll watch ./demo.mp4 -b ollama -m qwen3-vl:2b
+
+# Use TwelveLabs direct video understanding
+eyeroll watch ./demo.mp4 -b twelvelabs
 
 # Write report to file
 eyeroll watch ./bug.mp4 -o report.md
@@ -134,6 +137,7 @@ eyeroll history clear --yes
 |---|---|---|
 | `EYEROLL_BACKEND` | Default backend | `gemini` |
 | `EYEROLL_API_URL` | Hosted eyeroll API URL for `--backend eyeroll-api` | `https://api.eyeroll.dev` |
+| `TWELVE_LABS_API_KEY` | TwelveLabs API key | |
 | `GEMINI_API_KEY` | Gemini API key | |
 | `OPENAI_API_KEY` | OpenAI API key (also fallback for compatible providers) | |
 | `OPENROUTER_API_KEY` | OpenRouter API key | |

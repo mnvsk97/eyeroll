@@ -55,9 +55,13 @@ gemini = [
 openai = [
     "openai>=1.0",
 ]
+twelvelabs = [
+    "twelvelabs>=1.0",
+]
 all = [
     "google-genai>=1.0",
     "openai>=1.0",
+    "twelvelabs>=1.0",
 ]
 server = [
     "fastapi>=0.110",
@@ -65,6 +69,7 @@ server = [
     "python-multipart>=0.0.9",
     "google-genai>=1.0",
     "openai>=1.0",
+    "twelvelabs>=1.0",
 ]
 dev = [
     "pytest>=7.0",

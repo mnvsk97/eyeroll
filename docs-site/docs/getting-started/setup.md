@@ -17,7 +17,7 @@ The init command does three things:
 The agent will:
 
 - Check if `eyeroll` is installed and install it if not
-- Ask which backend you want (Gemini, OpenAI, Ollama, OpenRouter, Groq, Grok, Cerebras, or openai-compat)
+- Ask which backend you want (Gemini, TwelveLabs, OpenAI, Ollama, OpenRouter, Groq, Grok, Cerebras, or openai-compat)
 - Run `eyeroll init` for interactive API key setup
 - Explore your codebase and generate `.eyeroll/context.md`
 
@@ -34,9 +34,10 @@ Which backend do you want to use?
 
   1. gemini  -- Google Gemini Flash API (fast, cheap, best quality)
   2. openai  -- OpenAI GPT-4o (great vision, Whisper audio)
-  3. ollama  -- Local models via Ollama (private, no API key)
+  3. twelvelabs -- TwelveLabs direct video understanding
+  4. ollama  -- Local models via Ollama (private, no API key)
 
-Choose [1/2/3]: 1
+Choose [1/2/3/4]: 1
 
 How do you want to authenticate with Google?
 

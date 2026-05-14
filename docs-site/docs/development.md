@@ -49,7 +49,7 @@ eyeroll/                          # Python CLI package
   acquire.py                      # Download from URLs, resolve local files
   extract.py                      # ffmpeg: key frame extraction, audio extraction
   analyze.py                      # Backend-agnostic analysis, synthesis prompts
-  backend.py                      # Backend ABC + Gemini, OpenAI, Ollama implementations
+  backend.py                      # Backend ABC + Gemini, TwelveLabs, OpenAI, Ollama implementations
   watch.py                        # Pipeline orchestrator, caching
   history.py                      # Cache listing, retrieval, clearing
   mcp_server.py                   # Hosted/local MCP tool wrapper

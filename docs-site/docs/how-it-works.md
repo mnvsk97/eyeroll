@@ -65,11 +65,13 @@ The orchestrator (`watch.py`) uses preflight capabilities to choose the best str
 
 Used when:
 
-- Backend supports video upload (Gemini only)
-- Video is within size limits (2GB for Gemini API key, 20MB for Vertex AI service account)
+- Backend supports video upload (Gemini or TwelveLabs)
+- Video is within size limits (2GB for Gemini API key, 20MB for Vertex AI service account, 200MB local files for TwelveLabs)
 - Video is under 1 hour
 
 Gemini API key users get the File API, which handles resumable uploads up to 2GB. The model sees motion, transitions, and timing.
+
+TwelveLabs uses direct asset upload and Pegasus analysis to produce the final structured report directly. It does not run frame extraction, a separate audio pass, or a second synthesis step.
 
 ### Multi-frame batch
 
@@ -116,6 +118,8 @@ Stored in `~/.eyeroll/cache/<key>.json` (global). Legacy local `.eyeroll/cache/`
 - Direct video analysis text
 - Audio transcript
 - Source URL, title, media type, timestamp
+
+TwelveLabs final reports are not cached as reusable intermediates because they include the user/context-specific final synthesis.
 
 ### What does NOT get cached
 

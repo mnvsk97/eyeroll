@@ -2,6 +2,7 @@
 
 Supports:
   - gemini: Google Gemini Flash API (requires GEMINI_API_KEY)
+  - twelvelabs: TwelveLabs Video Understanding API (requires TWELVE_LABS_API_KEY)
   - openai: OpenAI GPT-4o API (requires OPENAI_API_KEY)
   - ollama: Local Ollama with vision models like qwen3-vl (no API key needed)
   - openrouter: OpenRouter API (requires OPENROUTER_API_KEY)
@@ -14,6 +15,7 @@ Supports:
 import base64
 import os
 import sys
+import time
 from abc import ABC, abstractmethod
 
 from dotenv import load_dotenv
@@ -114,6 +116,142 @@ class Backend(ABC):
                 "batch_frames": self.supports_batch_frames,
                 "audio": self.supports_audio,
                 "max_video_mb": None,
+            },
+        }
+
+
+# ---------------------------------------------------------------------------
+# TwelveLabs Backend
+# ---------------------------------------------------------------------------
+
+class TwelveLabsBackend(Backend):
+    """TwelveLabs direct video-analysis backend."""
+
+    def __init__(
+        self,
+        model: str = "pegasus1.5",
+        poll_interval: float = 5.0,
+        timeout: float = 1800.0,
+    ):
+        try:
+            from twelvelabs import TwelveLabs
+        except ImportError:
+            raise ImportError(
+                "TwelveLabs backend requires twelvelabs. Install with: pip install eyeroll[twelvelabs]"
+            )
+
+        api_key = os.environ.get("TWELVE_LABS_API_KEY") or os.environ.get("TWELVELABS_API_KEY")
+        if not api_key:
+            raise AnalysisError(
+                "No TwelveLabs API key found. Set TWELVE_LABS_API_KEY and try again.\n\n"
+                "Or use a different backend:\n"
+                "  eyeroll watch <source> --backend gemini\n"
+                "  eyeroll watch <source> --backend ollama"
+            )
+
+        self._client = TwelveLabs(api_key=api_key, timeout=timeout)
+        self._model = model
+        self._poll_interval = poll_interval
+        self._timeout = timeout
+
+    def analyze_image(self, image_path: str, prompt: str, verbose: bool = False) -> str:
+        raise AnalysisError(
+            "The TwelveLabs backend is for video/audio files. "
+            "Use gemini, openai, or ollama for screenshots."
+        )
+
+    def analyze_video(self, video_path: str, prompt: str, verbose: bool = False) -> str:
+        try:
+            from twelvelabs.types import AnalyzePromptV2, VideoContext_AssetId
+        except ImportError as exc:
+            raise ImportError(
+                "Installed twelvelabs SDK is missing v1.3 analysis types. "
+                "Upgrade with: pip install -U twelvelabs"
+            ) from exc
+
+        if verbose:
+            file_size_mb = os.path.getsize(video_path) / (1024 * 1024)
+            print(
+                f"  Uploading to TwelveLabs ({file_size_mb:.1f}MB)...",
+                file=sys.stderr,
+            )
+
+        asset = None
+        with open(video_path, "rb") as f:
+            asset = self._client.assets.create(method="direct", file=f)
+
+        asset_id = getattr(asset, "id", None)
+        if not asset_id:
+            raise AnalysisError("TwelveLabs asset upload did not return an asset id.")
+
+        self._wait_for_asset(asset_id, verbose=verbose)
+
+        if verbose:
+            print("  Running TwelveLabs video analysis...", file=sys.stderr)
+
+        video = VideoContext_AssetId(asset_id=asset_id)
+        stream = self._client.analyze_stream(
+            model_name=self._model,
+            video=video,
+            prompt_v_2=AnalyzePromptV2(input_text=prompt),
+        )
+        chunks = []
+        for event in stream:
+            event_type = getattr(event, "event_type", None)
+            if event_type == "text_generation":
+                chunks.append(getattr(event, "text", "") or "")
+            elif event_type is None and isinstance(event, str):
+                chunks.append(event)
+
+        text = "".join(chunks).strip()
+        if not text:
+            raise AnalysisError("TwelveLabs returned an empty analysis.")
+        return text
+
+    def _wait_for_asset(self, asset_id: str, verbose: bool = False) -> None:
+        deadline = time.monotonic() + self._timeout
+        while True:
+            asset = self._client.assets.retrieve(asset_id)
+            status = getattr(asset, "status", None)
+            if status == "ready":
+                return
+            if status == "failed":
+                raise AnalysisError(f"TwelveLabs asset processing failed: {asset_id}")
+            if time.monotonic() >= deadline:
+                raise AnalysisError(f"TwelveLabs asset processing timed out: {asset_id}")
+            if verbose:
+                print(f"  TwelveLabs asset status: {status or 'unknown'}", file=sys.stderr)
+            time.sleep(self._poll_interval)
+
+    def analyze_audio(
+        self, audio_path: str, prompt: str, verbose: bool = False,
+        min_confidence: float = 0.4,
+    ) -> str:
+        raise AnalysisError("TwelveLabs audio is handled as part of direct video analysis.")
+
+    def generate(self, prompt: str, verbose: bool = False) -> str:
+        raise AnalysisError(
+            "TwelveLabs does not provide a text-only synthesis endpoint in eyeroll. "
+            "The TwelveLabs backend generates the final report directly from video."
+        )
+
+    @property
+    def supports_video(self) -> bool:
+        return True
+
+    @property
+    def supports_audio(self) -> bool:
+        return False
+
+    def preflight(self) -> dict:
+        return {
+            "healthy": True,
+            "error": None,
+            "capabilities": {
+                "video_upload": True,
+                "batch_frames": False,
+                "audio": False,
+                "max_video_mb": 200,
             },
         }
 
@@ -730,7 +868,7 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
 
     Args:
         name: Backend name. One of: 'gemini', 'openai', 'ollama', 'openrouter', 'groq',
-              'grok', 'cerebras', 'openai-compat', 'eyeroll-api'.
+              'grok', 'cerebras', 'openai-compat', 'eyeroll-api', 'twelvelabs'.
               Defaults to EYEROLL_BACKEND env var, otherwise 'gemini'.
         **kwargs: Passed to backend constructor (e.g., model, host, base_url).
     """
@@ -745,6 +883,8 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
 
     if name == "gemini":
         _current_backend = GeminiBackend(**kwargs)
+    elif name == "twelvelabs":
+        _current_backend = TwelveLabsBackend(**kwargs)
     elif name == "openai":
         _current_backend = OpenAIBackend(**kwargs)
     elif name == "ollama":
@@ -765,7 +905,7 @@ def get_backend(name: str | None = None, **kwargs) -> Backend:
     else:
         raise ValueError(
             f"Unknown backend: {name}. "
-            "Use 'gemini', 'openai', 'ollama', 'eyeroll-api', 'openrouter', 'groq', 'grok', "
+            "Use 'gemini', 'twelvelabs', 'openai', 'ollama', 'eyeroll-api', 'openrouter', 'groq', 'grok', "
             "'cerebras', or 'openai-compat'."
         )
 

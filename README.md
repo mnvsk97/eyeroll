@@ -18,6 +18,7 @@ eyeroll is a Claude Code plugin that analyzes screen recordings, Loom videos, Yo
 
 # Install the CLI
 pip install eyeroll[gemini]      # Gemini Flash API (recommended)
+pip install eyeroll[twelvelabs]  # TwelveLabs direct video understanding
 pip install eyeroll[openai]      # OpenAI GPT-4o + OpenRouter/Groq/Grok/Cerebras
 pip install eyeroll              # Ollama only (local, no API key) — requires Pillow
 pip install eyeroll[all]         # everything
@@ -30,6 +31,13 @@ pip install eyeroll[all]         # everything
 ```
 
 Picks your backend, configures API key, and generates codebase context — all in one step.
+
+For TwelveLabs directly:
+
+```bash
+export TWELVE_LABS_API_KEY=your-key-here
+eyeroll watch ./bug.mp4 --backend twelvelabs
+```
 
 ## Commands
 
@@ -65,6 +73,7 @@ eyeroll watch https://loom.com/share/abc123
 eyeroll watch ./bug.mp4 --context "checkout broken after PR #432"
 eyeroll watch ./bug.mp4 -cc .eyeroll/context.md --parallel 4
 eyeroll watch ./bug.mp4 --backend ollama -m qwen3-vl:2b
+eyeroll watch ./bug.mp4 --backend twelvelabs
 eyeroll watch ./bug.mp4 --backend groq
 eyeroll watch ./bug.mp4 --backend openrouter -m anthropic/claude-3.5-sonnet
 eyeroll watch ./bug.mp4 --backend openai-compat --base-url https://my-server/v1
@@ -86,6 +95,7 @@ eyeroll history
     ↓
 3. Choose strategy:
    - Gemini API key: direct upload via File API (up to 2GB)
+   - TwelveLabs: direct video understanding via Pegasus
    - Gemini service account: direct upload (up to 20MB)
    - OpenAI / OpenRouter / Groq: multi-frame batch (all frames in one call)
    - Ollama: frame-by-frame (one frame per call)
@@ -111,6 +121,7 @@ eyeroll history
 | Backend | Strategy | Audio | API Key | Cost | Best for |
 |---------|----------|-------|---------|------|----------|
 | **gemini** | Direct upload (up to 2GB) | Yes | GEMINI_API_KEY | ~$0.15 | Best quality (gemini-2.5-flash) |
+| **twelvelabs** | Direct video report | Included in video analysis | TWELVE_LABS_API_KEY | usage-based | Native video understanding |
 | **openai** | Multi-frame batch | Whisper | OPENAI_API_KEY | ~$0.20 | Existing OpenAI users |
 | **ollama** | Frame-by-frame | No | None | Free | Privacy, offline |
 | **openrouter** | Multi-frame batch | No | OPENROUTER_API_KEY | varies | Model variety |
@@ -118,6 +129,8 @@ eyeroll history
 | **grok** | Multi-frame batch | No | GROK_API_KEY | varies | xAI models |
 | **cerebras** | Multi-frame batch | No | CEREBRAS_API_KEY | cheap | Fast inference |
 | **openai-compat** | Multi-frame batch | No | any env var | varies | Custom/self-hosted endpoints |
+
+TwelveLabs uploads the video as an asset and asks Pegasus to generate the final structured report directly. It is intentionally not a frame-by-frame fallback backend; for videos beyond the direct-upload limits, use Gemini or OpenAI.
 
 Ollama runs locally. Install and start Ollama separately, then eyeroll can pull the selected model on first use.
 

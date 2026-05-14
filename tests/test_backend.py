@@ -11,6 +11,7 @@ from eyeroll.backend import (
     GeminiBackend,
     OllamaBackend,
     OpenAIBackend,
+    TwelveLabsBackend,
     get_backend,
     reset_backend,
 )
@@ -49,6 +50,14 @@ def test_get_backend_invalid():
         get_backend("invalid")
 
 
+def test_get_backend_twelvelabs():
+    mock_twelvelabs_mod = MagicMock()
+    with patch.dict(os.environ, {"TWELVE_LABS_API_KEY": "test-key"}), \
+         patch.dict("sys.modules", {"twelvelabs": mock_twelvelabs_mod}):
+        backend = get_backend("twelvelabs")
+        assert isinstance(backend, TwelveLabsBackend)
+
+
 def test_get_backend_caching():
     """Second call to get_backend returns the cached instance."""
     with patch.object(OllamaBackend, "_check_connection"):
@@ -75,6 +84,69 @@ def test_get_backend_default_gemini():
          patch.dict("sys.modules", {"google": MagicMock(), "google.genai": mock_genai}):
         backend = get_backend()
         assert isinstance(backend, GeminiBackend)
+
+
+# ---------------------------------------------------------------------------
+# TwelveLabsBackend
+# ---------------------------------------------------------------------------
+
+def _make_twelvelabs(**kwargs):
+    mock_twelvelabs_mod = MagicMock()
+    with patch.dict(os.environ, {"TWELVE_LABS_API_KEY": "test-key"}), \
+         patch.dict("sys.modules", {"twelvelabs": mock_twelvelabs_mod}):
+        return TwelveLabsBackend(**kwargs)
+
+
+def test_twelvelabs_no_api_key():
+    mock_twelvelabs_mod = MagicMock()
+    env = {
+        k: v for k, v in os.environ.items()
+        if k not in {"TWELVE_LABS_API_KEY", "TWELVELABS_API_KEY"}
+    }
+    with patch.dict(os.environ, env, clear=True), \
+         patch.dict("sys.modules", {"twelvelabs": mock_twelvelabs_mod}):
+        with pytest.raises(AnalysisError, match="No TwelveLabs API key found"):
+            TwelveLabsBackend()
+
+
+def test_twelvelabs_supports_video_only():
+    backend = _make_twelvelabs()
+
+    assert backend.supports_video is True
+    assert backend.supports_audio is False
+    with pytest.raises(AnalysisError, match="video/audio files"):
+        backend.analyze_image("/tmp/screenshot.png", "describe")
+    with pytest.raises(AnalysisError, match="text-only synthesis"):
+        backend.generate("summarize")
+
+
+def test_twelvelabs_analyze_video_streams_text(tmp_video_path):
+    mock_twelvelabs_mod = MagicMock()
+    mock_types_mod = MagicMock()
+    mock_types_mod.VideoContext_AssetId.side_effect = lambda asset_id: {"asset_id": asset_id}
+    mock_types_mod.AnalyzePromptV2.side_effect = lambda input_text: {"input_text": input_text}
+
+    client = MagicMock()
+    client.assets.create.return_value = MagicMock(id="asset-123")
+    client.assets.retrieve.return_value = MagicMock(status="ready")
+    client.analyze_stream.return_value = [
+        MagicMock(event_type="text_generation", text="part one "),
+        MagicMock(event_type="text_generation", text="part two"),
+    ]
+    mock_twelvelabs_mod.TwelveLabs.return_value = client
+
+    with patch.dict(os.environ, {"TWELVE_LABS_API_KEY": "test-key"}), \
+         patch.dict("sys.modules", {
+             "twelvelabs": mock_twelvelabs_mod,
+             "twelvelabs.types": mock_types_mod,
+         }):
+        backend = TwelveLabsBackend(poll_interval=0)
+        result = backend.analyze_video(tmp_video_path, "make report")
+
+    assert result == "part one part two"
+    client.assets.create.assert_called_once()
+    client.assets.retrieve.assert_called_once_with("asset-123")
+    client.analyze_stream.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

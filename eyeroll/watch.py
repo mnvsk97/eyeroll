@@ -28,6 +28,39 @@ MAX_DIRECT_UPLOAD_MB = 2000
 # Max video duration for direct upload (1 hour)
 MAX_DIRECT_UPLOAD_SECONDS = 3600
 
+TWELVE_LABS_DIRECT_REPORT_PROMPT = """Analyze this {duration}s screen recording and produce a concise engineering handoff.
+Start with "## Video Analysis" and include this metadata block exactly before any narrative:
+
+## Video Analysis
+
+### Metadata
+```
+intent: [bug_report | feature_request | question_answering | documentation_lookup | documentation_update | tutorial_or_howto | code_review | feature_demo | product_feedback | general_notes]
+category: [bug | feature | docs | question | other]
+confidence: [high | medium | low]
+scope: [in-context | out-of-context]
+repo_guess: [repository, product, customer, entity, or domain if evident from the recording or provided context, otherwise unknown]
+repo_confidence: [high | medium | low]
+severity: [critical | moderate | low]
+actionable: [yes | no]
+handoff_recommended: [yes | no]
+```
+
+Then use these headings, keeping each section brief: Content Type, Summary, What's Happening, Key Details, Audio/Narration Summary, Observations, Environment Clues, Confidence, Analysis, Suggested Next Steps, Clarifying Questions.
+If handoff_recommended is "yes", also include Agent Handoff with task type, likely subject, goal, evidence, investigation notes, expected PR contents, and verification.
+
+Rules:
+- Quote visible text exactly when readable. Say "unclear" instead of guessing.
+- Do not assume this is a bug; choose the content type from evidence.
+- Recommend handoff only for concrete code, docs, tests, or config work.
+- Never state file paths, owners, customer/product relationships, or entity facts unless visible in the recording or supplied below.
+
+Additional context:
+{context}
+
+Relevant project/product/domain context:
+{codebase_context}"""
+
 
 def watch(
     source: str,
@@ -128,6 +161,11 @@ def watch(
         if cached:
             if verbose:
                 print("  Cache hit — re-running synthesis", file=sys.stderr)
+            if cached.get("final_report"):
+                return _wrap_report(
+                    cached["final_report"], cached["title"], cached["media_type"],
+                    context, backend_label,
+                ), ck
             rpt = synthesize_report(
                 frame_analyses=cached.get("frame_analyses"),
                 video_analysis=cached.get("video_analysis"),
@@ -175,20 +213,28 @@ def watch(
                 file_path, title, max_frames, backend, backend_label, verbose, parallel,
                 min_audio_confidence=min_audio_confidence,
                 scene_threshold=scene_threshold,
+                context=context,
+                codebase_context=codebase_context,
             )
 
-        # Cache intermediates (before synthesis) — always save, even with --no-cache
-        _cache_save(cache_key, source, intermediates)
+        # Cache reusable intermediates before synthesis. TwelveLabs generates a
+        # context-bearing final report directly, so it is not reusable across
+        # different context values.
+        if not intermediates.get("final_report"):
+            _cache_save(cache_key, source, intermediates)
 
-        # Synthesis always runs fresh with current context
-        report = synthesize_report(
-            frame_analyses=intermediates["frame_analyses"],
-            video_analysis=intermediates["video_analysis"],
-            transcript=intermediates["transcript"],
-            context=context,
-            codebase_context=codebase_context,
-            verbose=verbose,
-        )
+        # Synthesis always runs fresh with current context unless the backend
+        # already produced the final structured report directly from the video.
+        report = intermediates.get("final_report")
+        if report is None:
+            report = synthesize_report(
+                frame_analyses=intermediates["frame_analyses"],
+                video_analysis=intermediates["video_analysis"],
+                transcript=intermediates["transcript"],
+                context=context,
+                codebase_context=codebase_context,
+                verbose=verbose,
+            )
 
         # Cost reporting
         if not no_cost:
@@ -199,7 +245,10 @@ def watch(
                 model=model,
                 num_frames=num_frames,
                 has_audio=intermediates.get("transcript") is not None,
-                direct_video=intermediates.get("video_analysis") is not None and num_frames == 0,
+                direct_video=(
+                    intermediates.get("video_analysis") is not None
+                    or intermediates.get("final_report") is not None
+                ) and num_frames == 0,
             )
             print(f"  {format_cost(cost_info)}", file=sys.stderr)
 
@@ -248,6 +297,8 @@ def _analyze_video(
     parallel: int = 1,
     min_audio_confidence: float = 0.4,
     scene_threshold: float = 30.0,
+    context: str | None = None,
+    codebase_context: str | None = None,
 ) -> dict:
     """Analyze a video file. Returns intermediates dict."""
     duration = get_video_duration(file_path)
@@ -262,14 +313,31 @@ def _analyze_video(
     max_mb = caps.get("max_video_mb") or MAX_DIRECT_UPLOAD_MB
     can_direct = caps["video_upload"] and file_size_mb <= max_mb and duration <= MAX_DIRECT_UPLOAD_SECONDS
     can_batch = caps["batch_frames"]
+    if backend_label == "twelvelabs" and not can_direct:
+        from .backend import AnalysisError
+        raise AnalysisError(
+            "TwelveLabs direct analysis currently supports local videos up to "
+            f"{max_mb}MB and {MAX_DIRECT_UPLOAD_SECONDS // 60} minutes. "
+            "Use gemini/openai for fallback frame analysis, or split/compress the video."
+        )
 
     video_analysis = None
     frame_analyses = None
+    final_report = None
 
     if can_direct:
         if verbose:
             print("  Strategy: direct video upload", file=sys.stderr)
-        video_analysis = analyze_video_direct(file_path, duration, verbose=verbose)
+        if backend_label == "twelvelabs":
+            prompt = TWELVE_LABS_DIRECT_REPORT_PROMPT.format(
+                duration=f"{duration:.0f}",
+                context=context or "(no additional context provided)",
+                codebase_context=codebase_context or "(no relevant context provided)",
+            )
+            final_report = backend.analyze_video(file_path, prompt, verbose=verbose)
+        else:
+            video_analysis = analyze_video_direct(file_path, duration, verbose=verbose)
+
     elif can_batch:
         if verbose:
             print("  Strategy: multi-frame batch (single API call)", file=sys.stderr)
@@ -293,6 +361,16 @@ def _analyze_video(
             frame_dir = os.path.dirname(frames[0]["frame_path"])
             shutil.rmtree(frame_dir, ignore_errors=True)
 
+    if final_report is not None:
+        return {
+            "title": title,
+            "media_type": f"video ({fmt_timestamp(duration)})",
+            "frame_analyses": None,
+            "video_analysis": None,
+            "transcript": None,
+            "final_report": final_report,
+        }
+
     # Audio transcription (only if backend supports it)
     transcript = None
     if backend.supports_audio and has_audio_track(file_path):
@@ -312,6 +390,7 @@ def _analyze_video(
         "frame_analyses": frame_analyses,
         "video_analysis": video_analysis,
         "transcript": transcript,
+        "final_report": final_report,
     }
 
 

@@ -4,18 +4,20 @@ eyeroll supports multiple vision backends. Each has different capabilities, cost
 
 ## Comparison
 
-| | Gemini | OpenAI | Ollama | OpenRouter / Groq / Grok / Cerebras |
-|---|---|---|---|---|
-| **Model** | Gemini 2.0 Flash | GPT-4o | qwen3-vl (default) | Varies by provider |
-| **Strategy** | Direct upload | Multi-frame batch | Frame-by-frame | Multi-frame batch |
-| **Audio** | Yes (native) | Yes (Whisper) | No | No |
-| **API key** | GEMINI_API_KEY | OPENAI_API_KEY | None | Provider-specific |
-| **Cost per video** | ~$0.15 | ~$0.20 | Free | Varies |
-| **Privacy** | Cloud | Cloud | Fully local | Cloud |
+| | Gemini | TwelveLabs | OpenAI | Ollama | OpenRouter / Groq / Grok / Cerebras |
+|---|---|---|---|---|---|
+| **Model** | Gemini 2.0 Flash | Pegasus 1.5 | GPT-4o | qwen3-vl (default) | Varies by provider |
+| **Strategy** | Direct upload | Direct video report | Multi-frame batch | Frame-by-frame | Multi-frame batch |
+| **Audio** | Yes (native) | Included in video analysis | Yes (Whisper) | No | No |
+| **API key** | GEMINI_API_KEY | TWELVE_LABS_API_KEY | OPENAI_API_KEY | None | Provider-specific |
+| **Cost per video** | ~$0.15 | Usage-based | ~$0.20 | Free | Varies |
+| **Privacy** | Cloud | Cloud | Cloud | Fully local | Cloud |
 
 ## When to use which
 
 **Gemini** -- Best overall. Direct video upload via File API (up to 2GB with API key, 20MB with service account). Native audio transcription. Cheapest cloud option.
+
+**TwelveLabs** -- Best when you want a video-native model to produce the final structured report directly from the recording. Uses the TwelveLabs asset upload and Pegasus analysis flow.
 
 **OpenAI** -- Good if you already have an OpenAI key. Uses multi-frame batch (all frames in one API call) for efficiency. Whisper for audio. Slightly more expensive than Gemini.
 
@@ -32,6 +34,7 @@ eyeroll runs a preflight check to detect backend capabilities, then chooses the 
 | Strategy | When used | How it works |
 |---|---|---|
 | **Direct upload** | Gemini (within size limits) | Full video uploaded via File API in one request |
+| **Direct video report** | TwelveLabs | Video uploaded as a TwelveLabs asset, then Pegasus generates the structured report directly |
 | **Multi-frame batch** | OpenAI, OpenRouter, Groq, Grok, Cerebras | All frames sent as images in a single API call |
 | **Frame-by-frame** | Ollama, or fallback for very large videos | Each frame analyzed in a separate API call |
 
@@ -45,6 +48,7 @@ export EYEROLL_BACKEND=ollama
 
 # Via CLI flag
 eyeroll watch video.mp4 --backend openai
+eyeroll watch video.mp4 --backend twelvelabs
 eyeroll watch video.mp4 --backend groq
 eyeroll watch video.mp4 --backend openai-compat --base-url https://my-server/v1
 

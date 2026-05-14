@@ -13,7 +13,7 @@ MODEL_PRICING = {
 _DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash", "openai": "gpt-4o", "groq": "llama-3.3-70b-versatile",
     "grok": "grok-2-vision-1212", "openrouter": "openai/gpt-4o", "cerebras": "llama3.1-70b",
-    "ollama": "qwen3-vl", "eyeroll-api": "gemini-2.5-flash",
+    "ollama": "qwen3-vl", "eyeroll-api": "gemini-2.5-flash", "twelvelabs": "pegasus1.5",
 }
 
 
@@ -24,6 +24,9 @@ def estimate_cost(backend_label, model=None, num_frames=0, has_audio=False,
     if backend_label == "ollama":
         return {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0,
                 "model": model or "local", "is_estimate": False}
+    if backend_label == "twelvelabs":
+        return {"input_tokens": 0, "output_tokens": 0, "cost_usd": None,
+                "model": model or "pegasus1.5", "is_estimate": False}
 
     model = model or _DEFAULT_MODELS.get(backend_label, "unknown")
     in_price, out_price = MODEL_PRICING.get(model, (0.0, 0.0))
@@ -43,6 +46,8 @@ def estimate_cost(backend_label, model=None, num_frames=0, has_audio=False,
 
 def format_cost(info):
     """Format cost info for stderr."""
+    if info["cost_usd"] is None:
+        return f"Cost: not estimated ({info['model']}, provider billed)"
     if info["cost_usd"] == 0:
         return f"Cost: $0.00 ({info['model']}, local)"
     e = "~" if info["is_estimate"] else ""

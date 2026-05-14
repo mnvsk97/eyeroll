@@ -29,6 +29,12 @@ Install the Python CLI with the backend you want:
 
     This also covers OpenRouter, Groq, Grok, Cerebras, and openai-compat backends (they all use the `openai` SDK).
 
+=== "TwelveLabs"
+
+    ```bash
+    pip install eyeroll[twelvelabs]
+    ```
+
 === "Ollama (local, no API key)"
 
     ```bash

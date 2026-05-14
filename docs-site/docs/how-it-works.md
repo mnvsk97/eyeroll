@@ -66,7 +66,7 @@ The orchestrator (`watch.py`) uses preflight capabilities to choose the best str
 Used when:
 
 - Backend supports video upload (Gemini or TwelveLabs)
-- Video is within size limits (2GB for Gemini API key, 20MB for Vertex AI service account)
+- Video is within size limits (2GB for Gemini API key, 20MB for Vertex AI service account, 200MB local files for TwelveLabs)
 - Video is under 1 hour
 
 Gemini API key users get the File API, which handles resumable uploads up to 2GB. The model sees motion, transitions, and timing.

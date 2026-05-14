@@ -19,7 +19,7 @@ Checks if `eyeroll` CLI is installed. If not, asks which backend you want and in
 | Choice | Install command |
 |---|---|
 | Gemini | `pip install eyeroll[gemini,download]` |
-| TwelveLabs | `pip install eyeroll[twelvelabs,download]` |
+| TwelveLabs | `pip install eyeroll[twelvelabs]` |
 | OpenAI / OpenRouter / Groq / Grok / Cerebras / openai-compat | `pip install eyeroll[openai,download]` |
 | Ollama | `pip install eyeroll[download]` |
 
